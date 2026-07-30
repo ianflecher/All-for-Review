@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Flashcard } from '../types';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
 interface FlashcardScreenProps {
   fileName: string;
   flashcards: Flashcard[];
+  /** Shown when no cards could be generated. */
+  fallbackText?: string;
   onBack: () => void;
 }
 
 export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
   fileName,
   flashcards,
+  fallbackText,
   onBack,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -25,9 +30,6 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
     setCurrentIndex(((index % flashcards.length) + flashcards.length) % flashcards.length);
   };
 
-  const nextCard = () => goTo(currentIndex + 1);
-  const prevCard = () => goTo(currentIndex - 1);
-
   const markKnown = (isKnown: boolean) => {
     setKnown((prev) => {
       const next = new Set(prev);
@@ -35,58 +37,67 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
       else next.delete(currentIndex);
       return next;
     });
-    nextCard();
+    goTo(currentIndex + 1);
   };
+
+  const progress = hasCards ? (currentIndex + 1) / flashcards.length : 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Flashcards</Text>
-        <View style={styles.placeholderButton} />
-      </View>
+      <ScreenHeader
+        title="Flashcards"
+        subtitle={fileName}
+        onBack={onBack}
+        accent={colors.accentFlashcards}
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.fileName} numberOfLines={1}>
-          {fileName}
-        </Text>
-
         {!hasCards ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🎴</Text>
-            <Text style={styles.emptyTitle}>No Flashcards Generated</Text>
-            <Text style={styles.emptyText}>
-              We couldn't find enough content in this PDF to build flashcards.
-            </Text>
+          <View style={styles.fallbackWrap}>
+            <View style={styles.noticeCard}>
+              <Text style={styles.noticeTitle}>No flashcards could be made</Text>
+              <Text style={styles.noticeBody}>
+                There wasn't enough structured content to build question-and-answer cards. The
+                original text is shown below so you can still study it.
+              </Text>
+            </View>
+            {fallbackText ? (
+              <View style={styles.textCard}>
+                <Text style={styles.fullText} selectable>
+                  {fallbackText.trim()}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : (
           <>
-            <View style={styles.progressRow}>
-              <Text style={styles.progressText}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>
                 Card {currentIndex + 1} of {flashcards.length}
               </Text>
-              <Text style={styles.progressText}>Known: {known.size}</Text>
+              <Text style={styles.knownLabel}>{known.size} known</Text>
+            </View>
+            <View style={styles.track}>
+              <View style={[styles.fill, { width: `${progress * 100}%` }]} />
             </View>
 
             <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.9}
+              style={[styles.card, showBack && styles.cardFlipped]}
+              activeOpacity={0.92}
               onPress={() => setShowBack(!showBack)}
             >
               <Text style={styles.cardLabel}>{showBack ? 'ANSWER' : 'QUESTION'}</Text>
               <Text style={styles.cardText}>
                 {showBack ? currentCard!.answer : currentCard!.question}
               </Text>
-              <Text style={styles.tapHint}>Tap card to flip</Text>
+              <Text style={styles.tapHint}>Tap to flip</Text>
             </TouchableOpacity>
 
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.navButton} onPress={prevCard}>
+              <TouchableOpacity style={styles.navButton} onPress={() => goTo(currentIndex - 1)}>
                 <Text style={styles.navButtonText}>← Prev</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={nextCard}>
+              <TouchableOpacity style={styles.navButton} onPress={() => goTo(currentIndex + 1)}>
                 <Text style={styles.navButtonText}>Next →</Text>
               </TouchableOpacity>
             </View>
@@ -94,16 +105,16 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
             {showBack && (
               <View style={styles.knowRow}>
                 <TouchableOpacity
-                  style={[styles.knowButton, styles.dontKnowButton]}
+                  style={[styles.knowButton, styles.learningButton]}
                   onPress={() => markKnown(false)}
                 >
-                  <Text style={styles.knowButtonText}>Still Learning</Text>
+                  <Text style={styles.learningText}>Still learning</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.knowButton, styles.knowButtonGreen]}
+                  style={[styles.knowButton, styles.knownButton]}
                   onPress={() => markKnown(true)}
                 >
-                  <Text style={styles.knowButtonText}>I Know This ✓</Text>
+                  <Text style={styles.knownText}>I know this ✓</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -115,84 +126,84 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f4ff' },
-  header: {
-    backgroundColor: '#6b4e9e',
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+
+  progressHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    marginBottom: spacing.sm,
   },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  progressLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  knownLabel: { ...typography.caption, color: colors.success, fontWeight: '700' },
+  track: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
   },
-  backText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  placeholderButton: { width: 50 },
-  content: { padding: 20, alignItems: 'center' },
-  fileName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#718096',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 12,
-  },
-  progressText: { fontSize: 13, color: '#6b4e9e', fontWeight: '600' },
+  fill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.pill },
+
   card: {
-    width: '100%',
-    minHeight: 220,
-    backgroundColor: '#6b4e9e',
-    padding: 30,
-    borderRadius: 20,
-    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.xl,
+    padding: spacing.xxl,
+    minHeight: 230,
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 5,
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    ...shadow(3),
   },
+  cardFlipped: { backgroundColor: colors.primaryDark },
   cardLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 12,
+    ...typography.micro,
+    color: colors.onPrimaryMuted,
+    letterSpacing: 1.4,
+    marginBottom: spacing.md,
   },
-  cardText: { color: '#fff', fontSize: 20, textAlign: 'center', lineHeight: 28 },
-  tapHint: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 16 },
-  navRow: { flexDirection: 'row', gap: 12, width: '100%', marginBottom: 12 },
+  cardText: {
+    color: colors.onPrimary,
+    fontSize: 19,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 27,
+  },
+  tapHint: { ...typography.micro, color: 'rgba(255,255,255,0.55)', marginTop: spacing.lg },
+
+  navRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   navButton: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#6b4e9e',
-    padding: 14,
-    borderRadius: 12,
+    ...card(1),
+    paddingVertical: spacing.lg,
     alignItems: 'center',
   },
-  navButtonText: { color: '#6b4e9e', fontSize: 15, fontWeight: '600' },
-  knowRow: { flexDirection: 'row', gap: 12, width: '100%' },
-  knowButton: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
-  dontKnowButton: { backgroundColor: '#ef4444' },
-  knowButtonGreen: { backgroundColor: '#22c55e' },
-  knowButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16, opacity: 0.5 },
-  emptyTitle: { fontSize: 20, fontWeight: '600', color: '#2d3748', marginBottom: 8 },
-  emptyText: { fontSize: 14, color: '#718096', textAlign: 'center', paddingHorizontal: 20 },
+  navButtonText: { ...typography.bodyStrong, color: colors.primary },
+
+  knowRow: { flexDirection: 'row', gap: spacing.md },
+  knowButton: {
+    flex: 1,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  learningButton: { backgroundColor: colors.dangerSoft, borderColor: 'rgba(217,74,74,0.3)' },
+  learningText: { ...typography.caption, color: colors.danger, fontWeight: '700' },
+  knownButton: { backgroundColor: colors.successSoft, borderColor: 'rgba(31,157,107,0.3)' },
+  knownText: { ...typography.caption, color: colors.success, fontWeight: '700' },
+
+  fallbackWrap: { gap: spacing.lg },
+  noticeCard: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(224, 160, 18, 0.35)',
+    padding: spacing.lg,
+  },
+  noticeTitle: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: 4 },
+  noticeBody: { ...typography.caption, color: colors.textSecondary, lineHeight: 19 },
+  textCard: { ...card(1), padding: spacing.lg },
+  fullText: { ...typography.body, color: colors.textSecondary, lineHeight: 23 },
 });

@@ -44,6 +44,13 @@ function startLocalServer() {
           res.end('Bad or missing url parameter');
           return;
         }
+        // Always answer 200 with a JSON envelope, tagged by a header. A plain
+        // web host would 404 or SPA-fallback this path, so the tag is how the
+        // renderer knows a real proxy answered rather than the app's own HTML.
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'X-Reviewer-Proxy': '1',
+        };
         try {
           const upstream = await fetch(target, {
             headers: {
@@ -52,12 +59,28 @@ function startLocalServer() {
               'Accept-Language': 'en-US,en;q=0.9',
             },
           });
-          const body = await upstream.text();
-          res.writeHead(upstream.status, { 'Content-Type': 'text/plain; charset=utf-8' });
-          res.end(body);
+          const html = await upstream.text();
+          res.writeHead(200, headers);
+          res.end(
+            JSON.stringify(
+              upstream.ok
+                ? { ok: true, status: upstream.status, html }
+                : {
+                    ok: false,
+                    status: upstream.status,
+                    error: `That page returned an error (HTTP ${upstream.status}).`,
+                  }
+            )
+          );
         } catch (err) {
-          res.writeHead(502, { 'Content-Type': 'text/plain' });
-          res.end(`Upstream fetch failed: ${err.message}`);
+          res.writeHead(200, headers);
+          res.end(
+            JSON.stringify({
+              ok: false,
+              status: 0,
+              error: `Could not reach that page. Check your internet connection.\n\n${err.message}`,
+            })
+          );
         }
         return;
       }

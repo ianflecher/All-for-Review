@@ -1,0 +1,6 @@
+# Built installers are large binaries — rebuild them with:
+#   cd PDFReviewerApp && npm run dist:win
+installers/*.exe
+installers/*.dmg
+installers/*.AppImage
+installers/*.apk

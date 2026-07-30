@@ -95,6 +95,63 @@ function assertNotVideoHost(url: string) {
   }
 }
 
+/**
+ * Asks the desktop app's same-origin proxy to fetch the page.
+ *
+ * Returns `null` when no proxy answered (i.e. we are on a plain website, not
+ * in the Electron shell), so the caller can fall back to a direct request.
+ */
+async function tryDesktopProxy(url: string): Promise<{ html?: string; error?: string } | null> {
+  let response: Response;
+  try {
+    response = await fetch(`/__fetch?url=${encodeURIComponent(url)}`);
+  } catch {
+    return null;
+  }
+
+  if (response.headers.get('x-reviewer-proxy') !== '1') return null;
+
+  try {
+    const payload = await response.json();
+    return payload.ok ? { html: payload.html } : { error: payload.error };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPageHtml(url: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    // Desktop builds proxy through the Electron main process, which is not
+    // bound by CORS. In a plain browser this returns null and we try directly.
+    const proxied = await tryDesktopProxy(url);
+    if (proxied?.html !== undefined) return proxied.html;
+    if (proxied?.error) throw new Error(proxied.error);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+    });
+  } catch (e) {
+    throw new Error(
+      Platform.OS === 'web'
+        ? 'Could not load that page. Browsers block reading other websites directly (CORS).\n\n' +
+          'Web links work in the mobile app and the desktop app — or save the page as a .txt ' +
+          'file and upload it here.'
+        : `Could not reach that page. Check your internet connection.\n\n${
+            e instanceof Error ? e.message : ''
+          }`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(`That page returned an error (HTTP ${response.status}).`);
+  }
+
+  return response.text();
+}
+
 /** Fetches a web page and extracts its readable article text. Requires internet. */
 export async function extractTextFromUrl(
   rawUrl: string
@@ -106,32 +163,14 @@ export async function extractTextFromUrl(
 
   assertNotVideoHost(url);
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
-    });
-  } catch (e) {
-    throw new Error(
-      Platform.OS === 'web'
-        ? 'Could not load that page. Browsers block reading other websites directly (CORS) — ' +
-          'web links work in the mobile and desktop versions of this app.'
-        : `Could not reach that page. Check your internet connection.\n\n${
-            e instanceof Error ? e.message : ''
-          }`
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(`That page returned an error (HTTP ${response.status}).`);
-  }
-
-  const html = await response.text();
+  const html = await fetchPageHtml(url);
   const text = htmlToArticleText(html);
 
-  if (text.trim().length < 200) {
+  // Only refuse when there is essentially nothing. Anything more is kept and
+  // shown as plain text, even if it is too thin to summarise well.
+  if (text.trim().length < 40) {
     throw new Error(
-      'Not enough readable text was found on that page. It may require signing in, or load its ' +
+      'No readable text was found on that page. It may require signing in, or load its ' +
         'content with JavaScript.'
     );
   }
@@ -177,11 +216,6 @@ export async function extractTextFromFile(uri: string, fileName: string): Promis
     default:
       throw new Error('Unsupported file type.');
   }
-}
-
-// TEMP-DEBUG-EXPOSE: remove before shipping
-if (typeof window !== 'undefined') {
-  (window as any).__sourceService = { extractTextFromFile, extractTextFromUrl, detectSourceKind };
 }
 
 /** Extract + analyse in one step, for any supported source. */

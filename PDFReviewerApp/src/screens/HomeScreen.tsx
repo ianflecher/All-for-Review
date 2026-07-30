@@ -27,7 +27,23 @@ import { DocumentAnalysis, FileItem, SourceKind } from '../types';
 import { ReviewerScreen } from './Reviewer';
 import { FlashcardScreen } from './FlashcardScreen';
 import { QuizScreen } from './QuizScreen';
+import { LearningMapScreen } from './LearningMapScreen';
 import { showAlert } from '../utils/alert';
+import { LoadingOverlay, LoadingStep } from '../components/LoadingOverlay';
+import { colors, radius, spacing, typography, card, shadow } from '../theme';
+
+const ONLINE_STEPS: LoadingStep[] = [
+  { label: 'Connecting to the website', online: true },
+  { label: 'Downloading the page', online: true },
+  { label: 'Reading the article text' },
+  { label: 'Building summary, cards & quiz' },
+];
+
+const OFFLINE_STEPS: LoadingStep[] = [
+  { label: 'Opening your file' },
+  { label: 'Extracting the text' },
+  { label: 'Building summary, cards & quiz' },
+];
 
 const SOURCE_ICONS: Record<SourceKind, string> = {
   pdf: '📄',
@@ -40,7 +56,7 @@ const SOURCE_ICONS: Record<SourceKind, string> = {
 
 const { width } = Dimensions.get('window');
 
-type ServiceView = 'list' | 'reviewer' | 'flashcards' | 'quiz';
+type ServiceView = 'list' | 'reviewer' | 'flashcards' | 'quiz' | 'map';
 
 interface HomeScreenProps {
   onNavigateToLanding?: () => void;
@@ -60,8 +76,12 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
   const [view, setView] = useState<ServiceView>('list');
   const [activeFile, setActiveFile] = useState<FileItem | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<DocumentAnalysis | null>(null);
+  const [activeText, setActiveText] = useState<string>('');
   const [processing, setProcessing] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState('');
+  const [loadingSteps, setLoadingSteps] = useState<LoadingStep[]>(OFFLINE_STEPS);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [loadingTitle, setLoadingTitle] = useState('Processing');
+  const [loadingDetail, setLoadingDetail] = useState<string | undefined>(undefined);
 
   // "Add from web link" input
   const [linkUrl, setLinkUrl] = useState('');
@@ -168,13 +188,23 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
     if (url.length === 0) return;
 
     setAddingLink(true);
+    setLoadingTitle('Reading web page');
+    setLoadingSteps(ONLINE_STEPS);
+    setLoadingDetail(url);
+    setLoadingStep(0);
     setProcessing(true);
-    setProcessingStatus('Fetching the page...');
 
     try {
       // Fetch now so a bad link fails immediately with a clear reason, and so
       // the saved entry can carry the real page title.
+      setLoadingStep(1);
       const { text, title } = await extractTextFromUrl(url);
+
+      setLoadingStep(2);
+      // Yield a frame so the step change paints before the heavy analysis.
+      await new Promise((r) => setTimeout(r, 60));
+
+      setLoadingStep(3);
       const analysis = analyzeDocument(text);
 
       const newFile: FileItem = {
@@ -202,6 +232,7 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
     } finally {
       setAddingLink(false);
       setProcessing(false);
+      setLoadingDetail(undefined);
     }
   };
 
@@ -233,34 +264,42 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
 
   const openService = async (service: ServiceView, file: FileItem) => {
     setModalVisible(false);
+
+    const isLink = (file.kind ?? detectSourceKind(file.name)) === 'link';
+    setLoadingTitle(isLink ? 'Reading web page' : 'Preparing your material');
+    setLoadingSteps(isLink ? ONLINE_STEPS : OFFLINE_STEPS);
+    setLoadingDetail(isLink ? file.uri : file.name);
+    setLoadingStep(0);
     setProcessing(true);
-    setProcessingStatus('Reading PDF...');
 
     try {
       let cached = await PDFService.getCachedAnalysis(file.id);
 
       if (!cached) {
-        setProcessingStatus('Extracting text and generating study material...');
+        setLoadingStep(1);
         cached = await processSource({
           uri: file.uri,
           name: file.name,
           // Older saved items predate `kind`; fall back to the file extension.
           kind: file.kind ?? detectSourceKind(file.name) ?? 'pdf',
         });
+        setLoadingStep(loadingSteps.length - 1);
         await PDFService.cacheAnalysis(file.id, cached);
       }
 
       setActiveFile(file);
       setActiveAnalysis(cached.analysis);
+      setActiveText(cached.text);
       setView(service);
     } catch (error) {
-      console.error('Error processing PDF:', error);
+      console.error('Error processing source:', error);
       showAlert(
-        'Could not process PDF',
-        error instanceof Error ? error.message : 'Something went wrong while reading this PDF.'
+        'Could not open this material',
+        error instanceof Error ? error.message : 'Something went wrong while reading it.'
       );
     } finally {
       setProcessing(false);
+      setLoadingDetail(undefined);
     }
   };
 
@@ -274,6 +313,10 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
 
   const handleCreateQuiz = () => {
     if (selectedFile) openService('quiz', selectedFile);
+  };
+
+  const handleCreateMap = () => {
+    if (selectedFile) openService('map', selectedFile);
   };
 
   const renderFile = ({ item, index }: { item: FileItem; index: number }) => {
@@ -325,6 +368,12 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
           <Text style={styles.actionButtonText}>Quiz</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleServiceSelect('map', item)}
+        >
+          <Text style={styles.actionButtonText}>Map</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
           onPress={() => deleteFile(item.id)}
         >
@@ -352,7 +401,8 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
             <Text style={styles.modalTitle}>
               {selectedService === 'reviewer' ? 'Reviewer Maker' :
                selectedService === 'flashcards' ? 'Flashcards' :
-               selectedService === 'quiz' ? 'Quiz' : 'Selected Service'}
+               selectedService === 'quiz' ? 'Quiz' :
+               selectedService === 'map' ? 'Learning Map' : 'Selected Service'}
             </Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
               <Text style={styles.closeButton}>✕</Text>
@@ -409,20 +459,23 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
                 </TouchableOpacity>
               </View>
             )}
+
+            {selectedService === 'map' && (
+              <View>
+                <Text style={styles.serviceDescription}>
+                  See how the main ideas in your material connect to each other, and spot
+                  the topics that stand alone and may need extra reading.
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalActionButton}
+                  onPress={handleCreateMap}
+                >
+                  <Text style={styles.modalActionButtonText}>Build Learning Map →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </Animated.View>
-      </View>
-    </Modal>
-  );
-
-  const ProcessingOverlay = () => (
-    <Modal animationType="fade" transparent visible={processing}>
-      <View style={styles.processingOverlay}>
-        <View style={styles.processingCard}>
-          <ActivityIndicator size="large" color="#6b4e9e" />
-          <Text style={styles.processingText}>{processingStatus}</Text>
-          <Text style={styles.processingSubtext}>This runs entirely on your device — no internet needed.</Text>
-        </View>
       </View>
     </Modal>
   );
@@ -432,6 +485,7 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
       <ReviewerScreen
         file={activeFile}
         analysis={activeAnalysis}
+        text={activeText}
         onBack={() => setView('list')}
       />
     );
@@ -442,6 +496,7 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
       <FlashcardScreen
         fileName={activeFile.name}
         flashcards={activeAnalysis.flashcards}
+        fallbackText={activeText}
         onBack={() => setView('list')}
       />
     );
@@ -452,6 +507,17 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
       <QuizScreen
         fileName={activeFile.name}
         questions={activeAnalysis.quiz}
+        fallbackText={activeText}
+        onBack={() => setView('list')}
+      />
+    );
+  }
+
+  if (view === 'map' && activeFile) {
+    return (
+      <LearningMapScreen
+        fileName={activeFile.name}
+        text={activeText}
         onBack={() => setView('list')}
       />
     );
@@ -611,417 +677,241 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
       </ScrollView>
 
       <ServiceModal />
-      <ProcessingOverlay />
+      <LoadingOverlay
+        visible={processing}
+        title={loadingTitle}
+        steps={loadingSteps}
+        activeStep={loadingStep}
+        detail={loadingDetail}
+      />
     </View>
   );
 };
 
+
 const styles = StyleSheet.create({
-  orRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 12,
-    gap: 10,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e2e8f0',
-  },
-  orText: {
-    fontSize: 12,
-    color: '#718096',
-    fontWeight: '600',
-  },
-  linkRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  linkInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#2d3748',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  linkButton: {
-    backgroundColor: '#6b4e9e',
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    borderRadius: 12,
-    minWidth: 68,
-    alignItems: 'center',
-  },
-  linkButtonDisabled: {
-    backgroundColor: '#c3b3dd',
-  },
-  linkButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  linkHint: {
-    fontSize: 11,
-    color: '#718096',
-    marginTop: 8,
-    lineHeight: 16,
-  },
-  processingOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  processingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 30,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 320,
-  },
-  processingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2d3748',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  processingSubtext: {
-    fontSize: 12,
-    color: '#718096',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f4ff',
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+
+  // Header
   header: {
-    backgroundColor: '#6b4e9e',
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.primary,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadow(2),
   },
-  headerContent: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 4,
-  },
+  headerContent: { alignItems: 'center', paddingHorizontal: spacing.xl },
+  headerTitle: { ...typography.title, color: colors.onPrimary },
+  headerSubtitle: { ...typography.micro, color: colors.onPrimaryMuted, marginTop: 3, fontWeight: '500' },
+
+  // Stats
   statsCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    ...card(1),
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.lg,
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  statBox: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statBoxNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#6b4e9e',
-  },
-  statBoxLabel: {
-    fontSize: 12,
-    color: '#718096',
-    marginTop: 4,
-  },
-  statDividerVertical: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#e2e8f0',
-  },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  statBox: { alignItems: 'center', flex: 1 },
+  statBoxNumber: { ...typography.subheading, fontSize: 20, color: colors.primary },
+  statBoxLabel: { ...typography.micro, color: colors.textMuted, marginTop: 2, fontWeight: '500' },
+  statDividerVertical: { width: 1, height: 30, backgroundColor: colors.border },
+
+  // Search
   searchContainer: {
+    ...card(1),
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    paddingHorizontal: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
-  searchIcon: {
-    fontSize: 18,
-    marginRight: 10,
-  },
+  searchIcon: { fontSize: 15, marginRight: spacing.sm },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#333',
+    paddingVertical: spacing.md,
+    ...typography.body,
+    color: colors.textPrimary,
   },
-  clearSearch: {
-    fontSize: 16,
-    color: '#718096',
-    padding: 4,
-  },
-  uploadSection: {
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
+  clearSearch: { fontSize: 15, color: colors.textMuted, padding: spacing.xs },
+
+  // Upload / link section
+  uploadSection: { marginHorizontal: spacing.lg, marginTop: spacing.xl },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2d3748',
-    marginBottom: 12,
-  },
-  fileCount: {
-    fontSize: 14,
-    color: '#6b4e9e',
-    fontWeight: '600',
-  },
+  sectionTitle: { ...typography.subheading, color: colors.textPrimary, marginBottom: spacing.md },
+  fileCount: { ...typography.micro, color: colors.primary },
+
   uploadButton: {
-    backgroundColor: '#6b4e9e',
-    paddingVertical: 16,
-    borderRadius: 16,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.xl,
+    borderRadius: radius.lg,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadow(2),
   },
-  uploadButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
+  uploadButtonText: { ...typography.subheading, color: colors.onPrimary, fontSize: 17 },
   uploadSubtext: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    marginTop: 4,
+    ...typography.micro,
+    color: colors.onPrimaryMuted,
+    marginTop: 5,
+    fontWeight: '400',
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
-  filesSection: {
-    marginHorizontal: 16,
-    marginTop: 24,
-    marginBottom: 20,
-  },
-  fileList: {
-    paddingBottom: 20,
-  },
-  fileCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(107, 78, 158, 0.1)',
-  },
-  fileInfo: {
+
+  orRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+    gap: spacing.md,
   },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: { ...typography.micro, color: colors.textMuted, fontWeight: '500' },
+
+  linkRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  linkInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...typography.caption,
+    color: colors.textPrimary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  linkButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md + 2,
+    borderRadius: radius.md,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  linkButtonDisabled: { backgroundColor: '#c2b4d9' },
+  linkButtonText: { ...typography.bodyStrong, color: colors.onPrimary },
+  linkHint: {
+    ...typography.micro,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    lineHeight: 16,
+    fontWeight: '400',
+  },
+
+  // File list
+  filesSection: { marginHorizontal: spacing.lg, marginTop: spacing.xxl, marginBottom: spacing.xl },
+  fileList: { paddingBottom: spacing.lg },
+  fileCard: { ...card(1), padding: spacing.lg, marginBottom: spacing.md },
+  fileInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   fileIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(107, 78, 158, 0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
-  fileIcon: {
-    fontSize: 24,
-  },
-  fileDetails: {
-    flex: 1,
-  },
-  fileName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2d3748',
-    marginBottom: 4,
-  },
-  fileMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  fileMetaText: {
-    fontSize: 12,
-    color: '#718096',
-  },
-  fileActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    gap: 8,
-  },
+  fileIcon: { fontSize: 20 },
+  fileDetails: { flex: 1 },
+  fileName: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: 3 },
+  fileMeta: { flexDirection: 'row', alignItems: 'center' },
+  fileMetaText: { ...typography.micro, color: colors.textMuted, fontWeight: '400' },
+
+  fileActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   actionButton: {
-    backgroundColor: 'rgba(107, 78, 158, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginRight: 8,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primarySoftBorder,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radius.sm,
   },
-  actionButtonText: {
-    color: '#6b4e9e',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  deleteButtonText: {
-    fontSize: 14,
-  },
+  actionButtonText: { ...typography.micro, color: colors.primary },
+  deleteButton: { backgroundColor: colors.dangerSoft, borderColor: 'rgba(217,74,74,0.25)' },
+  deleteButtonText: { fontSize: 13 },
+
+  // Empty states
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
-    marginHorizontal: 16,
+    paddingVertical: 56,
+    marginHorizontal: spacing.lg,
   },
-  emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-    opacity: 0.5,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#2d3748',
-    marginBottom: 8,
-  },
+  emptyStateIcon: { fontSize: 54, marginBottom: spacing.lg, opacity: 0.45 },
+  emptyStateTitle: { ...typography.subheading, color: colors.textPrimary, marginBottom: spacing.sm },
   emptyStateText: {
-    fontSize: 14,
-    color: '#718096',
+    ...typography.caption,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   getStartedButton: {
-    backgroundColor: '#6b4e9e',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    ...shadow(2),
   },
-  getStartedButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#718096',
-    textAlign: 'center',
-  },
+  getStartedButtonText: { ...typography.bodyStrong, color: colors.onPrimary },
+  emptyText: { ...typography.caption, color: colors.textSecondary, textAlign: 'center' },
+
+  // Service modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(31, 36, 55, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    minHeight: 300,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    minHeight: 280,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 15,
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#2d3748',
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#718096',
-    fontWeight: '600',
-  },
-  modalBody: {
-    flex: 1,
-  },
+  modalTitle: { ...typography.title, fontSize: 21, color: colors.textPrimary },
+  closeButton: { fontSize: 20, color: colors.textMuted, fontWeight: '600', padding: spacing.xs },
+  modalBody: { flex: 1 },
   selectedFileInfo: {
-    backgroundColor: '#f7fafc',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 20,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.xl,
   },
-  selectedFileLabel: {
-    fontSize: 12,
-    color: '#718096',
-    marginBottom: 4,
-  },
-  selectedFileName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2d3748',
-  },
+  selectedFileLabel: { ...typography.micro, color: colors.textMuted, marginBottom: 3, fontWeight: '500' },
+  selectedFileName: { ...typography.caption, color: colors.textPrimary, fontWeight: '600' },
   serviceDescription: {
-    fontSize: 14,
-    color: '#4a5568',
-    lineHeight: 20,
-    marginBottom: 20,
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 21,
+    marginBottom: spacing.xl,
   },
   modalActionButton: {
-    backgroundColor: '#6b4e9e',
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
     alignItems: 'center',
+    ...shadow(2),
   },
-  modalActionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  modalActionButtonText: { ...typography.bodyStrong, color: colors.onPrimary, fontSize: 16 },
 });

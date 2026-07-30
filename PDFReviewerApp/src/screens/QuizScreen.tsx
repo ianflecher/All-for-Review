@@ -1,14 +1,32 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
+} from 'react-native';
 import { QuizQuestion } from '../types';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
 interface QuizScreenProps {
   fileName: string;
   questions: QuizQuestion[];
+  /** Shown when no questions could be generated. */
+  fallbackText?: string;
   onBack: () => void;
 }
 
-export const QuizScreen: React.FC<QuizScreenProps> = ({ fileName, questions, onBack }) => {
+export const QuizScreen: React.FC<QuizScreenProps> = ({
+  fileName,
+  questions,
+  fallbackText,
+  onBack,
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [answers, setAnswers] = useState<(number | null)[]>(() => questions.map(() => null));
@@ -16,6 +34,11 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ fileName, questions, onB
 
   const hasQuestions = questions.length > 0;
   const question = hasQuestions ? questions[currentIndex] : null;
+
+  const score = answers.reduce<number>(
+    (total, ans, idx) => total + (ans !== null && ans === questions[idx]?.correctAnswer ? 1 : 0),
+    0
+  );
 
   const selectOption = (optionIndex: number) => {
     if (selected !== null) return;
@@ -43,28 +66,26 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ fileName, questions, onB
     setFinished(false);
   };
 
-  const score = answers.reduce<number>(
-    (total, ans, idx) => total + (ans !== null && ans === questions[idx]?.correctAnswer ? 1 : 0),
-    0
-  );
-
   if (!hasQuestions) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Quiz</Text>
-          <View style={styles.placeholderButton} />
-        </View>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📊</Text>
-          <Text style={styles.emptyTitle}>No Quiz Available</Text>
-          <Text style={styles.emptyText}>
-            We couldn't find enough content in this PDF to build a quiz.
-          </Text>
-        </View>
+        <ScreenHeader title="Quiz" subtitle={fileName} onBack={onBack} accent={colors.accentQuiz} />
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.noticeCard}>
+            <Text style={styles.noticeTitle}>No quiz could be made</Text>
+            <Text style={styles.noticeBody}>
+              There wasn't enough structured content to build multiple-choice questions. The
+              original text is shown below so you can still study it.
+            </Text>
+          </View>
+          {fallbackText ? (
+            <View style={styles.textCard}>
+              <Text style={styles.fullText} selectable>
+                {fallbackText.trim()}
+              </Text>
+            </View>
+          ) : null}
+        </ScrollView>
       </View>
     );
   }
@@ -73,20 +94,16 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ fileName, questions, onB
     const pct = Math.round((score / questions.length) * 100);
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Quiz Results</Text>
-          <View style={styles.placeholderButton} />
-        </View>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.fileName} numberOfLines={1}>
-            {fileName}
-          </Text>
+        <ScreenHeader
+          title="Results"
+          subtitle={fileName}
+          onBack={onBack}
+          accent={colors.accentQuiz}
+        />
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.resultCard}>
             <Text style={styles.resultScore}>
-              {score} / {questions.length}
+              {score}/{questions.length}
             </Text>
             <Text style={styles.resultPct}>{pct}% correct</Text>
           </View>
@@ -96,19 +113,23 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ fileName, questions, onB
             const isCorrect = userAnswer === q.correctAnswer;
             return (
               <View key={q.id} style={styles.reviewCard}>
-                <Text style={styles.reviewQuestion}>{idx + 1}. {q.text}</Text>
+                <Text style={styles.reviewQuestion}>
+                  {idx + 1}. {q.text}
+                </Text>
                 <Text style={isCorrect ? styles.reviewCorrect : styles.reviewIncorrect}>
-                  {isCorrect ? '✓ Correct' : `✗ Your answer: ${userAnswer !== null ? q.options[userAnswer] : '(skipped)'}`}
+                  {isCorrect
+                    ? '✓ Correct'
+                    : `✗ You chose: ${userAnswer !== null ? q.options[userAnswer] : '(skipped)'}`}
                 </Text>
                 {!isCorrect && (
-                  <Text style={styles.reviewAnswer}>Correct answer: {q.options[q.correctAnswer]}</Text>
+                  <Text style={styles.reviewAnswer}>Answer: {q.options[q.correctAnswer]}</Text>
                 )}
               </View>
             );
           })}
 
-          <TouchableOpacity style={styles.restartButton} onPress={restart}>
-            <Text style={styles.restartButtonText}>Retake Quiz</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={restart}>
+            <Text style={styles.primaryButtonText}>Retake Quiz</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -117,130 +138,135 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ fileName, questions, onB
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Quiz</Text>
-        <View style={styles.placeholderButton} />
-      </View>
+      <ScreenHeader title="Quiz" subtitle={fileName} onBack={onBack} accent={colors.accentQuiz} />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.fileName} numberOfLines={1}>
-          {fileName}
-        </Text>
-        <Text style={styles.progressText}>
-          Question {currentIndex + 1} of {questions.length}
-        </Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressLabel}>
+            Question {currentIndex + 1} of {questions.length}
+          </Text>
+          <Text style={styles.scoreLabel}>Score {score}</Text>
+        </View>
+        <View style={styles.track}>
+          <View
+            style={[styles.fill, { width: `${((currentIndex + 1) / questions.length) * 100}%` }]}
+          />
+        </View>
 
         <Text style={styles.question}>{question!.text}</Text>
 
         {question!.options.map((opt, idx) => {
           const isSelected = selected === idx;
           const isCorrectOption = idx === question!.correctAnswer;
-          const showState = selected !== null;
+          const revealed = selected !== null;
 
-          let optionStyle = styles.option;
-          if (showState && isCorrectOption) optionStyle = { ...styles.option, ...styles.correctOption };
-          else if (showState && isSelected && !isCorrectOption)
-            optionStyle = { ...styles.option, ...styles.wrongOption };
+          const optionStyle: StyleProp<ViewStyle>[] = [styles.option];
+          const textStyle: StyleProp<TextStyle>[] = [styles.optionText];
+          if (revealed && isCorrectOption) {
+            optionStyle.push(styles.optionCorrect);
+            textStyle.push(styles.optionTextCorrect);
+          } else if (revealed && isSelected) {
+            optionStyle.push(styles.optionWrong);
+            textStyle.push(styles.optionTextWrong);
+          }
 
           return (
-            <TouchableOpacity key={idx} style={optionStyle} onPress={() => selectOption(idx)}>
-              <Text style={styles.optionText}>{opt}</Text>
+            <TouchableOpacity
+              key={idx}
+              style={optionStyle}
+              onPress={() => selectOption(idx)}
+              activeOpacity={revealed ? 1 : 0.7}
+            >
+              <Text style={textStyle}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
 
         {selected !== null && (
-          <TouchableOpacity style={styles.nextButton} onPress={nextQuestion}>
-            <Text style={styles.nextButtonText}>
+          <TouchableOpacity style={styles.primaryButton} onPress={nextQuestion}>
+            <Text style={styles.primaryButtonText}>
               {currentIndex + 1 >= questions.length ? 'See Results →' : 'Next Question →'}
             </Text>
           </TouchableOpacity>
         )}
-
-        <Text style={styles.scoreText}>Score so far: {score}</Text>
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f4ff' },
-  header: {
-    backgroundColor: '#6b4e9e',
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+
+  progressHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    marginBottom: spacing.sm,
   },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  progressLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  scoreLabel: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  track: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    overflow: 'hidden',
+    marginBottom: spacing.xl,
   },
-  backText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  placeholderButton: { width: 50 },
-  content: { padding: 20 },
-  fileName: { fontSize: 14, fontWeight: '600', color: '#718096', marginBottom: 4 },
-  progressText: { fontSize: 13, color: '#6b4e9e', fontWeight: '600', marginBottom: 16 },
-  question: { fontSize: 20, fontWeight: '700', color: '#2d3748', marginBottom: 20, lineHeight: 27 },
+  fill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.pill },
+
+  question: {
+    ...typography.title,
+    fontSize: 21,
+    color: colors.textPrimary,
+    marginBottom: spacing.xl,
+    lineHeight: 29,
+  },
   option: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    ...card(1),
+    padding: spacing.lg,
+    marginBottom: spacing.md,
   },
-  correctOption: { backgroundColor: '#dcfce7', borderColor: '#22c55e' },
-  wrongOption: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },
-  optionText: { color: '#2d3748', fontSize: 15, fontWeight: '500' },
-  nextButton: {
-    backgroundColor: '#6b4e9e',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 12,
+  optionCorrect: { backgroundColor: colors.successSoft, borderColor: colors.success },
+  optionWrong: { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
+  optionText: { ...typography.body, color: colors.textPrimary, fontWeight: '500' },
+  optionTextCorrect: { color: '#14684a', fontWeight: '700' },
+  optionTextWrong: { color: '#a5322f', fontWeight: '700' },
+
+  primaryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
     alignItems: 'center',
+    marginTop: spacing.md,
+    ...shadow(2),
   },
-  nextButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  scoreText: { fontSize: 13, color: '#718096', marginTop: 20, textAlign: 'center' },
+  primaryButtonText: { ...typography.bodyStrong, color: colors.onPrimary, fontSize: 16 },
+
   resultCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    ...card(2),
+    padding: spacing.xxl,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
-  resultScore: { fontSize: 36, fontWeight: '800', color: '#6b4e9e' },
-  resultPct: { fontSize: 14, color: '#718096', marginTop: 6 },
-  reviewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+  resultScore: { fontSize: 40, fontWeight: '800', color: colors.primary },
+  resultPct: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
+
+  reviewCard: { ...card(1), padding: spacing.lg, marginBottom: spacing.md },
+  reviewQuestion: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: 6 },
+  reviewCorrect: { ...typography.caption, color: colors.success, fontWeight: '700' },
+  reviewIncorrect: { ...typography.caption, color: colors.danger, fontWeight: '700' },
+  reviewAnswer: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
+
+  noticeCard: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(224, 160, 18, 0.35)',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  reviewQuestion: { fontSize: 14, fontWeight: '600', color: '#2d3748', marginBottom: 6 },
-  reviewCorrect: { fontSize: 13, color: '#22c55e', fontWeight: '600' },
-  reviewIncorrect: { fontSize: 13, color: '#ef4444', fontWeight: '600' },
-  reviewAnswer: { fontSize: 13, color: '#718096', marginTop: 4 },
-  restartButton: {
-    backgroundColor: '#6b4e9e',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  restartButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16, opacity: 0.5 },
-  emptyTitle: { fontSize: 20, fontWeight: '600', color: '#2d3748', marginBottom: 8 },
-  emptyText: { fontSize: 14, color: '#718096', textAlign: 'center', paddingHorizontal: 20 },
+  noticeTitle: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: 4 },
+  noticeBody: { ...typography.caption, color: colors.textSecondary, lineHeight: 19 },
+  textCard: { ...card(1), padding: spacing.lg },
+  fullText: { ...typography.body, color: colors.textSecondary, lineHeight: 23 },
 });
