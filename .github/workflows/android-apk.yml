@@ -1,0 +1,54 @@
+name: Build Android APK
+
+# This PC cannot build an APK: the Android SDK only comes from dl.google.com.
+# GitHub's runners ship the SDK and NDK already, so the build happens here and
+# the APK is attached to the run as a downloadable artifact.
+on:
+  push:
+    branches:
+      - claude/android-reviewer-fix-jf1sla
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    defaults:
+      run:
+        working-directory: PDFReviewerApp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PDFReviewerApp/package-lock.json
+
+      # Expo SDK 55 / AGP 8 want a JDK in the 17-21 range; the runner default
+      # is newer than the Android build tools accept.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the native Android project
+        run: npx expo prebuild -p android --no-install
+
+      - name: Build the APK
+        working-directory: PDFReviewerApp/android
+        # Only the two ARM ABIs real phones use — x86/x86_64 are emulator-only
+        # and would roughly double the download for nothing.
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: IDF-Reviewer-apk
+          path: PDFReviewerApp/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
