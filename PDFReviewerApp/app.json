@@ -16,6 +16,8 @@
     },
     "android": {
       "package": "com.idfreviewer.app",
+      "versionCode": 1,
+      "backgroundColor": "#f6f4fb",
       "adaptiveIcon": {
         "backgroundColor": "#091022",
         "foregroundImage": "./assets/android-icon-foreground.png",

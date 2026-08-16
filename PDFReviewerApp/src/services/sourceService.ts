@@ -23,19 +23,32 @@ export const SUPPORTED_EXTENSIONS: Record<string, SourceKind> = {
   vtt: 'captions',
 };
 
-export const PICKER_MIME_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'text/vtt',
-  'application/x-subrip',
-  '.srt',
-  '.vtt',
-  '.md',
-];
+/**
+ * Types handed to the document picker.
+ *
+ * Android filters the picker strictly by the MIME types it is given, and its
+ * storage providers rarely tag .srt/.vtt/.md files with the types below — they
+ * come through as application/octet-stream or nothing at all, so a filtered
+ * picker shows them greyed out and unselectable. Android therefore opens on
+ * everything and the extension check in `detectSourceKind` rejects the rest
+ * after picking, with a message naming the supported formats.
+ */
+export const PICKER_MIME_TYPES =
+  Platform.OS === 'android'
+    ? ['*/*']
+    : [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain',
+        'text/markdown',
+        'text/csv',
+        'text/vtt',
+        'application/x-subrip',
+        '.srt',
+        '.vtt',
+        '.md',
+      ];
 
 export function detectSourceKind(fileName: string): SourceKind | null {
   const ext = fileName.split('.').pop()?.toLowerCase();

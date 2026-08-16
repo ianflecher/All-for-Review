@@ -29,6 +29,7 @@ import { FlashcardScreen } from './FlashcardScreen';
 import { QuizScreen } from './QuizScreen';
 import { LearningMapScreen } from './LearningMapScreen';
 import { showAlert } from '../utils/alert';
+import { useAndroidBack } from '../utils/useAndroidBack';
 import { LoadingOverlay, LoadingStep } from '../components/LoadingOverlay';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
@@ -86,6 +87,34 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
   // "Add from web link" input
   const [linkUrl, setLinkUrl] = useState('');
   const [addingLink, setAddingLink] = useState(false);
+
+  /**
+   * Android back button. Every screen in this app is a state change rather than
+   * a navigator route, so back has to be routed by hand: innermost thing first,
+   * then out to the landing page, and only then out of the app.
+   *
+   * This lives in HomeScreen alone (not split with App) because BackHandler
+   * runs the most recently registered listener first, and a parent's effect
+   * always registers after its child's — a handler in App would hijack these.
+   */
+  const handleAndroidBack = React.useCallback(() => {
+    if (processing) return true; // busy extracting — swallow it
+    if (modalVisible) {
+      setModalVisible(false);
+      return true;
+    }
+    if (view !== 'list') {
+      setView('list');
+      return true;
+    }
+    if (onNavigateToLanding) {
+      onNavigateToLanding();
+      return true;
+    }
+    return false; // nothing left to pop — let Android close the app
+  }, [processing, modalVisible, view, onNavigateToLanding]);
+
+  useAndroidBack(handleAndroidBack);
 
   useEffect(() => {
     loadSavedFiles();

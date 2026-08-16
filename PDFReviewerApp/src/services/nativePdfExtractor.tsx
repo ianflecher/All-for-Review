@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Asset } from 'expo-asset';
 // This file only runs on iOS/Android, where the legacy FileSystem API
@@ -19,12 +19,53 @@ import pdfWorkerAsset from '../../assets/pdfjs/pdf.worker.min.pdfjs';
  * network, so this works fully offline on-device.
  */
 
-type PendingRequest = { resolve: (text: string) => void; reject: (err: Error) => void };
+/**
+ * Bytes of base64 pushed into the WebView per injectJavaScript call.
+ *
+ * A whole PDF cannot go in one call: on Android injectJavaScript ends up in an
+ * evaluateJavascript() Binder transaction, which fails once the script gets
+ * into the megabytes — silently, so the extract promise would simply never
+ * settle. 64KB per call keeps every transaction far below that ceiling.
+ */
+const CHUNK_SIZE = 64 * 1024;
+
+/** Base timeout, plus extra per MB, since big files legitimately take longer. */
+const BASE_TIMEOUT_MS = 30000;
+const TIMEOUT_MS_PER_MB = 15000;
+
+type PendingRequest = {
+  resolve: (text: string) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
 
 let webviewRef: WebView | null = null;
 let isReady = false;
-let readyWaiters: Array<() => void> = [];
+let readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
 let pending: PendingRequest | null = null;
+
+function settleReject(error: Error) {
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pending.reject(error);
+  pending = null;
+}
+
+function settleResolve(text: string) {
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pending.resolve(text);
+  pending = null;
+}
+
+/** Called when the engine goes away (unmount, crash, load failure). */
+function teardown(reason: string) {
+  isReady = false;
+  const waiters = readyWaiters;
+  readyWaiters = [];
+  waiters.forEach((w) => w.reject(new Error(reason)));
+  settleReject(new Error(reason));
+}
 
 async function buildHtml(): Promise<string> {
   const libAsset = Asset.fromModule(pdfLibAsset);
@@ -42,7 +83,20 @@ async function buildHtml(): Promise<string> {
   var workerBlob = new Blob([${workerSourceLiteral}], { type: 'application/javascript' });
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
 
-  window.extractPdfText = async function (base64) {
+  // The document arrives in pieces (see CHUNK_SIZE on the native side) and is
+  // reassembled here before pdf.js sees it.
+  var buffer = [];
+
+  function send(payload) {
+    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+  }
+
+  window.pdfReset = function () { buffer = []; };
+  window.pdfChunk = function (part) { buffer.push(part); };
+
+  window.pdfRun = async function () {
+    var base64 = buffer.join('');
+    buffer = [];
     try {
       var binary = atob(base64);
       var bytes = new Uint8Array(binary.length);
@@ -54,13 +108,13 @@ async function buildHtml(): Promise<string> {
         var content = await page.getTextContent();
         text += content.items.map(function (it) { return it.str; }).join(' ') + '\\n\\n';
       }
-      window.ReactNativeWebView.postMessage(JSON.stringify({ ok: true, text: text }));
+      send({ ok: true, text: text });
     } catch (e) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ ok: false, error: String((e && e.message) || e) }));
+      send({ ok: false, error: String((e && e.message) || e) });
     }
   };
 
-  window.ReactNativeWebView.postMessage('ready');
+  send({ ready: true });
 })();
 </script>
 </body></html>`;
@@ -68,47 +122,61 @@ async function buildHtml(): Promise<string> {
 
 export const PdfExtractorHost: React.FC = () => {
   const [html, setHtml] = useState<string | null>(null);
+  const localRef = useRef<WebView | null>(null);
 
   useEffect(() => {
     let mounted = true;
     buildHtml()
       .then((doc) => mounted && setHtml(doc))
-      .catch((e) => console.warn('Failed to prepare offline PDF engine:', e));
+      .catch((e) => {
+        console.warn('Failed to prepare offline PDF engine:', e);
+        teardown('The offline PDF engine could not be prepared.');
+      });
     return () => {
       mounted = false;
+      // Without this, isReady would stay true against a WebView that no longer
+      // exists and every later extraction would hang or throw.
+      if (webviewRef === localRef.current) webviewRef = null;
+      teardown('The offline PDF engine was closed.');
     };
   }, []);
 
   if (!html) return null;
 
   return (
-    <View style={{ width: 0, height: 0, opacity: 0 }} pointerEvents="none">
+    <View style={styles.host} pointerEvents="none">
       <WebView
         ref={(r) => {
+          localRef.current = r;
           webviewRef = r;
         }}
         originWhitelist={['*']}
         source={{ html }}
         javaScriptEnabled
+        onError={() => teardown('The offline PDF engine failed to load.')}
+        onRenderProcessGone={() =>
+          teardown('The offline PDF engine ran out of memory. Try a smaller PDF.')
+        }
         onMessage={(event) => {
-          const data = event.nativeEvent.data;
-          if (data === 'ready') {
+          let parsed: any;
+          try {
+            parsed = JSON.parse(event.nativeEvent.data);
+          } catch {
+            return; // ignore malformed / unrelated messages
+          }
+
+          if (parsed.ready) {
             isReady = true;
-            readyWaiters.forEach((fn) => fn());
+            const waiters = readyWaiters;
             readyWaiters = [];
+            waiters.forEach((w) => w.resolve());
             return;
           }
-          try {
-            const parsed = JSON.parse(data);
-            if (!pending) return;
-            if (parsed.ok) {
-              pending.resolve(parsed.text);
-            } else {
-              pending.reject(new Error(parsed.error || 'Failed to extract PDF text.'));
-            }
-            pending = null;
-          } catch {
-            // ignore malformed / unrelated messages
+
+          if (parsed.ok) {
+            settleResolve(parsed.text);
+          } else {
+            settleReject(new Error(parsed.error || 'Failed to extract PDF text.'));
           }
         }}
       />
@@ -116,26 +184,70 @@ export const PdfExtractorHost: React.FC = () => {
   );
 };
 
-function waitForReady(timeoutMs = 15000): Promise<void> {
+const styles = StyleSheet.create({
+  // 1x1 rather than 0x0: some Android builds skip work for zero-sized views.
+  host: { position: 'absolute', width: 1, height: 1, opacity: 0, top: 0, left: 0 },
+});
+
+function waitForReady(timeoutMs = 20000): Promise<void> {
   if (isReady) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
+      readyWaiters = readyWaiters.filter((w) => w !== waiter);
       reject(new Error('Offline PDF engine took too long to start.'));
     }, timeoutMs);
-    readyWaiters.push(() => {
-      clearTimeout(timer);
-      resolve();
-    });
+
+    const waiter = {
+      resolve: () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      reject: (e: Error) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    };
+    readyWaiters.push(waiter);
   });
 }
 
 export async function extractTextNative(base64: string): Promise<string> {
   await waitForReady();
-  if (!webviewRef) {
+
+  const view = webviewRef;
+  if (!view) {
     throw new Error('Offline PDF engine is not available. Please restart the app and try again.');
   }
-  return new Promise((resolve, reject) => {
-    pending = { resolve, reject };
-    webviewRef!.injectJavaScript(`window.extractPdfText(${JSON.stringify(base64)}); true;`);
+  if (pending) {
+    throw new Error('Another document is still being read. Please wait for it to finish.');
+  }
+
+  const sizeMb = base64.length / (1024 * 1024);
+  const timeoutMs = BASE_TIMEOUT_MS + Math.ceil(sizeMb) * TIMEOUT_MS_PER_MB;
+
+  const result = new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending = null;
+      reject(new Error('Reading this PDF took too long. It may be very large or damaged.'));
+    }, timeoutMs);
+    pending = { resolve, reject, timer };
   });
+
+  const request = pending;
+
+  view.injectJavaScript('window.pdfReset(); true;');
+  for (let offset = 0; offset < base64.length; offset += CHUNK_SIZE) {
+    // The engine can die or time out mid-transfer; stop feeding a dead WebView.
+    if (pending !== request) return result;
+
+    const chunk = base64.slice(offset, offset + CHUNK_SIZE);
+    view.injectJavaScript(`window.pdfChunk(${JSON.stringify(chunk)}); true;`);
+    // Yield between chunks so the UI thread can keep the loading overlay
+    // animating instead of freezing for the length of a large document.
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  if (pending === request) view.injectJavaScript('window.pdfRun(); true;');
+
+  return result;
 }

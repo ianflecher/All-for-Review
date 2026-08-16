@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PdfExtractorHost } from './src/services/nativePdfExtractor';
 import { colors, radius, spacing, typography, card, shadow } from './src/theme';
@@ -53,9 +54,13 @@ const App = () => {
   if (showHome) {
     return (
       <SafeAreaProvider>
+        {/* Status bar sits over the light background inset, so it needs dark icons. */}
+        <StatusBar style="dark" />
         {/* Hidden WebView that runs pdf.js offline on iOS/Android. */}
         {Platform.OS !== 'web' && <PdfExtractorHost />}
-        <SafeAreaView style={styles.flex} edges={['top']}>
+        {/* Android 15 forces edge-to-edge, so the bottom edge is inset too —
+            otherwise buttons end up underneath the gesture bar. */}
+        <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
           <HomeScreen onNavigateToLanding={() => setShowHome(false)} />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -64,7 +69,8 @@ const App = () => {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="dark" />
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
             <Text style={styles.heroTitle}>IDF Reviewer</Text>

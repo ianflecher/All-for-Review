@@ -37,13 +37,63 @@ export function splitIntoParagraphs(text: string): string[] {
   return text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
 }
 
+/**
+ * Distinguishes a heading / slide title from a hard-wrapped body line.
+ *
+ * Both end without a full stop, so length alone can't tell them apart — a line
+ * wrapped at 72 columns looks exactly like a long heading. What separates them
+ * is what comes next: a heading is followed by a blank line or by the start of
+ * a new sentence, whereas a wrapped line runs straight on into its own
+ * continuation. Requiring both a short line and a clean break after it keeps
+ * hard-wrapped paragraphs intact.
+ *
+ * Lines ending in ':' deliberately don't count: "Term: definition" split across
+ * two lines needs to stay joined for the definition patterns to match it.
+ */
+function looksLikeHeading(line: string, nextLine: string | undefined): boolean {
+  if (line.length > 60) return false;
+  if (/[.!?:;,]$/.test(line)) return false;
+  if (line.split(' ').length > 10) return false;
+
+  // End of input, or a paragraph break, or the next line opens something new.
+  if (nextLine === undefined || nextLine.length === 0) return true;
+  return /^[A-Z0-9]/.test(nextLine);
+}
+
 export function splitIntoSentences(text: string): string[] {
-  const normalized = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!normalized) return [];
-  const matches = normalized.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [normalized];
-  return matches
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const out: string[] = [];
+  let buffer: string[] = [];
+
+  const flush = () => {
+    const joined = buffer.join(' ').trim();
+    buffer = [];
+    if (!joined) return;
+    const matches = joined.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [joined];
+    for (const match of matches) {
+      const sentence = match.trim();
+      if (sentence.length > 0) out.push(sentence);
+    }
+  };
+
+  // Headings are pulled out line by line; everything else is joined back up
+  // before sentence splitting, so hard-wrapped text isn't chopped mid-sentence.
+  const lines = text.split('\n').map((line) => line.replace(/\s+/g, ' ').trim());
+
+  lines.forEach((line, index) => {
+    if (line.length === 0) {
+      flush();
+      return;
+    }
+    if (looksLikeHeading(line, lines[index + 1])) {
+      flush();
+      out.push(line);
+      return;
+    }
+    buffer.push(line);
+  });
+  flush();
+
+  return out;
 }
 
 function wordFrequencies(text: string): Map<string, number> {
