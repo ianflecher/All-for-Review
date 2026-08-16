@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { QuizQuestion } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { LongText } from '../components/LongText';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
 interface QuizScreenProps {
@@ -80,9 +81,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
           </View>
           {fallbackText ? (
             <View style={styles.textCard}>
-              <Text style={styles.fullText} selectable>
-                {fallbackText.trim()}
-              </Text>
+              <LongText text={fallbackText} style={styles.fullText} />
             </View>
           ) : null}
         </ScrollView>

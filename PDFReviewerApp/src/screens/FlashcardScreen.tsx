@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Flashcard } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { LongText } from '../components/LongText';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
 interface FlashcardScreenProps {
@@ -63,9 +64,7 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
             </View>
             {fallbackText ? (
               <View style={styles.textCard}>
-                <Text style={styles.fullText} selectable>
-                  {fallbackText.trim()}
-                </Text>
+                <LongText text={fallbackText} style={styles.fullText} />
               </View>
             ) : null}
           </View>

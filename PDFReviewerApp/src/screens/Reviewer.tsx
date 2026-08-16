@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { DocumentAnalysis, FileItem } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { LongText } from '../components/LongText';
 import { colors, radius, spacing, typography, card } from '../theme';
 
 interface ReviewerProps {
@@ -89,9 +90,7 @@ export const ReviewerScreen = ({ file, analysis, text, onBack }: ReviewerProps) 
 
           {(showFullText || !hasSummary) &&
             (text.trim().length > 0 ? (
-              <Text style={styles.fullText} selectable>
-                {text.trim()}
-              </Text>
+              <LongText text={text} style={styles.fullText} />
             ) : (
               <Text style={styles.noticeBody}>No text could be read from this source.</Text>
             ))}
