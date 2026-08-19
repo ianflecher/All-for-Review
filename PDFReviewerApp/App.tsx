@@ -10,6 +10,10 @@ import {
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { PlannerScreen } from './src/screens/PlannerScreen';
+import { WalletScreen } from './src/screens/WalletScreen';
+import { ScheduleScreen } from './src/screens/ScheduleScreen';
+import { FileOrganizerScreen } from './src/screens/FileOrganizerScreen';
 import { PdfExtractorHost } from './src/services/nativePdfExtractor';
 import { colors, radius, spacing, typography, card, shadow } from './src/theme';
 
@@ -48,20 +52,63 @@ const services = [
   },
 ];
 
-const App = () => {
-  const [showHome, setShowHome] = useState(false);
+/**
+ * Tools that stand on their own, rather than being generated from a document.
+ * They keep their own data in local storage and never need a file to open.
+ */
+const tools: { name: string; icon: string; accent: string; blurb: string; screen: AppScreen }[] = [
+  {
+    name: 'Planner',
+    icon: '🗓️',
+    accent: colors.accentReviewer,
+    blurb: 'Assignments sorted by deadline, with overdue work pushed to the top.',
+    screen: 'planner',
+  },
+  {
+    name: 'Allowance',
+    icon: '💰',
+    accent: colors.accentQuiz,
+    blurb: 'Track what you receive and what you spend, and where it goes.',
+    screen: 'wallet',
+  },
+  {
+    name: 'Schedule',
+    icon: '⏰',
+    accent: colors.accentMap,
+    blurb: 'Your weekly timetable, with the next class up front.',
+    screen: 'schedule',
+  },
+  {
+    name: 'File Organizer',
+    icon: '🗂️',
+    accent: colors.accentFlashcards,
+    blurb: 'Sort your uploaded documents into subject folders.',
+    screen: 'files',
+  },
+];
 
-  if (showHome) {
+type AppScreen = 'landing' | 'documents' | 'planner' | 'wallet' | 'schedule' | 'files';
+
+const App = () => {
+  const [screen, setScreen] = useState<AppScreen>('landing');
+  const goLanding = () => setScreen('landing');
+
+  if (screen !== 'landing') {
     return (
       <SafeAreaProvider>
         {/* Status bar sits over the light background inset, so it needs dark icons. */}
         <StatusBar style="dark" />
-        {/* Hidden WebView that runs pdf.js offline on iOS/Android. */}
-        {Platform.OS !== 'web' && <PdfExtractorHost />}
+        {/* Hidden WebView that runs pdf.js offline on iOS/Android. Only the
+            documents screen extracts PDFs, so it is not mounted elsewhere. */}
+        {Platform.OS !== 'web' && screen === 'documents' && <PdfExtractorHost />}
         {/* Android 15 forces edge-to-edge, so the bottom edge is inset too —
             otherwise buttons end up underneath the gesture bar. */}
         <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-          <HomeScreen onNavigateToLanding={() => setShowHome(false)} />
+          {screen === 'documents' && <HomeScreen onNavigateToLanding={goLanding} />}
+          {screen === 'planner' && <PlannerScreen onBack={goLanding} />}
+          {screen === 'wallet' && <WalletScreen onBack={goLanding} />}
+          {screen === 'schedule' && <ScheduleScreen onBack={goLanding} />}
+          {screen === 'files' && <FileOrganizerScreen onBack={goLanding} />}
         </SafeAreaView>
       </SafeAreaProvider>
     );
@@ -92,7 +139,7 @@ const App = () => {
 
             <TouchableOpacity
               style={styles.heroButton}
-              onPress={() => setShowHome(true)}
+              onPress={() => setScreen('documents')}
               activeOpacity={0.85}
             >
               <Text style={styles.heroButtonText}>Get Started</Text>
@@ -122,7 +169,7 @@ const App = () => {
               <TouchableOpacity
                 key={service.name}
                 style={styles.card}
-                onPress={() => setShowHome(true)}
+                onPress={() => setScreen('documents')}
                 activeOpacity={0.9}
               >
                 <View style={[styles.cardStripe, { backgroundColor: service.accent }]} />
@@ -150,11 +197,35 @@ const App = () => {
             ))}
           </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Student tools</Text>
+            <Text style={styles.sectionSubtitle}>
+              Everyday things that work on their own, with no document needed
+            </Text>
+          </View>
+
+          <View style={styles.toolGrid}>
+            {tools.map((tool) => (
+              <TouchableOpacity
+                key={tool.name}
+                style={styles.toolCard}
+                onPress={() => setScreen(tool.screen)}
+                activeOpacity={0.9}
+              >
+                <View style={[styles.toolIcon, { backgroundColor: `${tool.accent}1f` }]}>
+                  <Text style={styles.toolIconText}>{tool.icon}</Text>
+                </View>
+                <Text style={styles.toolTitle}>{tool.name}</Text>
+                <Text style={styles.toolBlurb}>{tool.blurb}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>Ready when you are</Text>
             <TouchableOpacity
               style={styles.footerButton}
-              onPress={() => setShowHome(true)}
+              onPress={() => setScreen('documents')}
               activeOpacity={0.85}
             >
               <Text style={styles.footerButtonText}>Start studying →</Text>
@@ -280,6 +351,32 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   featureText: { ...typography.micro, color: colors.textSecondary, fontWeight: '500' },
+
+  toolGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+  },
+  toolCard: {
+    ...card(1),
+    // Two per row, with the gap taken out of each half.
+    width: '48%',
+    flexGrow: 1,
+    padding: spacing.lg,
+  },
+  toolIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  toolIconText: { fontSize: 20 },
+  toolTitle: { ...typography.subheading, color: colors.textPrimary, marginBottom: spacing.xs },
+  toolBlurb: { ...typography.micro, color: colors.textSecondary, fontWeight: '400', lineHeight: 16 },
 
   footer: {
     backgroundColor: colors.primaryDark,

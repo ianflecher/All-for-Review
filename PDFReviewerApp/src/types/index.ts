@@ -47,6 +47,8 @@ export interface FileItem {
   /** Legacy field kept for previously saved items; `kind` is authoritative. */
   type: string;
   kind?: SourceKind;
+  /** Subject folder assigned in the File Organizer. Unset means "Unsorted". */
+  subject?: string;
 }
 
 // For JSON serialization/deserialization
@@ -63,4 +65,42 @@ export interface FlashcardJSON {
   question: string;
   answer: string;
   createdAt: string;
+}
+/** An assignment or task tracked by the Student Planner. */
+export interface Assignment {
+  id: string;
+  title: string;
+  subject: string;
+  /** Due date as "YYYY-MM-DD". */
+  dueDate: string;
+  notes?: string;
+  done: boolean;
+  createdAt: string;
+}
+
+export type TransactionKind = 'income' | 'expense';
+
+/** A single allowance received or amount spent. */
+export interface Transaction {
+  id: string;
+  kind: TransactionKind;
+  /** Always positive; `kind` carries the direction. */
+  amount: number;
+  category: string;
+  note?: string;
+  /** Date as "YYYY-MM-DD". */
+  date: string;
+}
+
+/** One recurring class in the weekly timetable. */
+export interface ClassSession {
+  id: string;
+  subject: string;
+  /** 0 = Monday, matching DAY_NAMES in utils/datetime. */
+  day: number;
+  /** 24-hour "HH:MM". */
+  start: string;
+  end: string;
+  room?: string;
+  teacher?: string;
 }

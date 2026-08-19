@@ -1,11 +1,25 @@
 # IDF Reviewer
 
-Turn a document or a web article into study material — a ranked summary,
-flashcards, a multiple-choice quiz and a concept map. Everything except
-fetching a web link runs on-device, with no account and no network.
+A student app that runs entirely on the phone. Everything except fetching a
+web link works offline, with no account and no server.
+
+**From your documents** — a ranked summary, flashcards, a multiple-choice quiz
+and a concept map, generated from whatever you upload.
 
 **Accepts:** PDF, Word (`.docx`), PowerPoint (`.pptx`), text (`.txt`, `.md`,
 `.csv`), captions (`.srt`, `.vtt`) and web article links.
+
+**Standalone tools** — these need no document and keep their own data:
+
+| Tool | What it does |
+|---|---|
+| **Planner** | Assignments grouped as overdue / today / this week / later, tick off when done |
+| **Allowance** | Log money received and spent, with a running balance, weekly total and per-category breakdown |
+| **Schedule** | Weekly class timetable with a day picker and the next class of the day up front |
+| **File Organizer** | Sort uploaded documents into subject folders, with search |
+
+All four store their data locally — AsyncStorage on the phone (SQLite under the
+hood), `localStorage` on web. Nothing is uploaded anywhere.
 
 The app is an Expo / React Native project in `PDFReviewerApp/`, and runs on
 Android, iOS, web and as an Electron desktop app from the same source.
@@ -51,6 +65,10 @@ rather than returning an empty reviewer.
 ## Checks
 
 ```bash
-npx tsc --noEmit                  # typecheck
+npx tsc --noEmit                    # typecheck
 npx expo export --platform android  # verify the bundle builds
 ```
+
+Pushing to the Android branch also runs `.github/workflows/android-apk.yml`,
+which builds a real APK on a GitHub runner and attaches it to the
+`android-latest` release.
