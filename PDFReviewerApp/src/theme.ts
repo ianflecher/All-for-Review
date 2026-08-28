@@ -7,41 +7,57 @@ import { Platform, ViewStyle } from 'react-native';
  */
 
 export const colors = {
-  // Brand
-  primary: '#6d4aa7',
-  primaryDark: '#513583',
-  primaryDarker: '#3b2560',
-  primarySoft: 'rgba(109, 74, 167, 0.10)',
-  primarySoftBorder: 'rgba(109, 74, 167, 0.18)',
+  // Brand — a saturated blue, so the header blocks read as app chrome rather
+  // than as a page banner.
+  primary: '#2563eb',
+  primaryDark: '#1d4ed8',
+  primaryDarker: '#1e40af',
+  primarySoft: 'rgba(37, 99, 235, 0.10)',
+  primarySoftBorder: 'rgba(37, 99, 235, 0.20)',
 
   // Surfaces
-  background: '#f6f4fb',
+  background: '#f4f6fb',
   surface: '#ffffff',
-  surfaceAlt: '#faf8ff',
+  surfaceAlt: '#f7f9fd',
 
   // Text
-  textPrimary: '#1f2437',
-  textSecondary: '#5b6178',
-  textMuted: '#8b90a4',
+  textPrimary: '#0f172a',
+  textSecondary: '#475569',
+  textMuted: '#94a3b8',
   onPrimary: '#ffffff',
-  onPrimaryMuted: 'rgba(255, 255, 255, 0.78)',
+  onPrimaryMuted: 'rgba(255, 255, 255, 0.80)',
 
   // Lines
-  border: '#e8e5f2',
+  border: '#e6ecf5',
 
   // Feedback
-  success: '#1f9d6b',
-  successSoft: '#e4f7ef',
-  danger: '#d94a4a',
-  dangerSoft: '#fdeced',
-  warning: '#e0a012',
-  warningSoft: '#fdf5e3',
+  success: '#10b981',
+  successSoft: '#e7f8f1',
+  danger: '#ef4444',
+  dangerSoft: '#fdecec',
+  warning: '#f59e0b',
+  warningSoft: '#fef6e7',
 
-  // Per-service accents
-  accentReviewer: '#4a7fd4',
-  accentFlashcards: '#c8657f',
-  accentQuiz: '#3f9b8c',
-  accentMap: '#d08a3e',
+  // Per-tool accents, used for tile stripes and achievement badges.
+  accentReviewer: '#2563eb',
+  accentFlashcards: '#ec4899',
+  accentQuiz: '#10b981',
+  accentMap: '#f59e0b',
+  accentPlanner: '#8b5cf6',
+  accentWallet: '#06b6d4',
+  accentSchedule: '#f97316',
+  accentFiles: '#6366f1',
+
+  // Dark tile background, as used by the category grid on the home screen.
+  tile: '#1e293b',
+  tileOverlay: 'rgba(15, 23, 42, 0.55)',
+
+  // Bottom tab bar
+  tabActive: '#2563eb',
+  tabInactive: '#94a3b8',
+
+  /** Filled buttons that are currently unavailable. */
+  disabled: '#b6c6e3',
 };
 
 export const spacing = {

@@ -47,6 +47,7 @@ export const STORAGE_KEYS = {
   assignments: 'plannerAssignments',
   transactions: 'walletTransactions',
   schedule: 'classSchedule',
+  profile: 'studentProfile',
 } as const;
 
 export async function removeJson(key: string): Promise<void> {

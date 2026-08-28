@@ -221,6 +221,6 @@ const styles = StyleSheet.create({
   cancel: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
   cancelText: { ...typography.bodyStrong, color: colors.textSecondary },
   submit: { backgroundColor: colors.primary, ...shadow(1) },
-  submitDisabled: { backgroundColor: '#c2b4d9' },
+  submitDisabled: { backgroundColor: colors.disabled },
   submitText: { ...typography.bodyStrong, color: colors.onPrimary },
 });

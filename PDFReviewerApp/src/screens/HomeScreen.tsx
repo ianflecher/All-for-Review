@@ -61,9 +61,11 @@ type ServiceView = 'list' | 'reviewer' | 'flashcards' | 'quiz' | 'map';
 
 interface HomeScreenProps {
   onNavigateToLanding?: () => void;
+  /** Bumped by the shell's centre button to open the file picker from anywhere. */
+  pickToken?: number;
 }
 
-export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
+export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenProps) => {
   const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
@@ -211,6 +213,12 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
       setLoading(false);
     }
   };
+
+  // The shell raises pickToken when the centre button is pressed. It starts at
+  // 0, so the guard stops the picker opening the moment the tab first mounts.
+  useEffect(() => {
+    if (pickToken > 0) pickDocument();
+  }, [pickToken]);
 
   const addLink = async () => {
     const url = linkUrl.trim();
@@ -556,14 +564,34 @@ export const HomeScreen = ({ onNavigateToLanding }: HomeScreenProps) => {
     <View style={styles.container}>
       {/* Header with Clickable Website Name */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.headerContent}
-          onPress={onNavigateToLanding}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.headerTitle}>IDF Reviewer</Text>
-          <Text style={styles.headerSubtitle}>← Tap to go back</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={onNavigateToLanding}
+            activeOpacity={0.7}
+            accessibilityLabel="Back to home"
+          >
+            <Text style={styles.headerIconText}>←</Text>
+          </TouchableOpacity>
+
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.headerTitle}>Study Materials</Text>
+            <Text style={styles.headerSubtitle}>
+              {uploadedFiles.length === 0
+                ? 'Nothing saved yet'
+                : `${uploadedFiles.length} saved`}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={pickDocument}
+            activeOpacity={0.7}
+            accessibilityLabel="Add a document"
+          >
+            <Text style={styles.headerIconText}>＋</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -724,15 +752,25 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: colors.primary,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-    ...shadow(2),
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-  headerContent: { alignItems: 'center', paddingHorizontal: spacing.xl },
-  headerTitle: { ...typography.title, color: colors.onPrimary },
-  headerSubtitle: { ...typography.micro, color: colors.onPrimaryMuted, marginTop: 3, fontWeight: '500' },
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  headerTextBlock: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIconText: { color: colors.onPrimary, fontSize: 18, fontWeight: '700' },
+  headerTitle: { ...typography.heading, color: colors.onPrimary },
+  headerSubtitle: { ...typography.micro, color: colors.onPrimaryMuted, marginTop: 2, fontWeight: '500' },
 
   // Stats
   statsCard: {
@@ -823,7 +861,7 @@ const styles = StyleSheet.create({
     minWidth: 72,
     alignItems: 'center',
   },
-  linkButtonDisabled: { backgroundColor: '#c2b4d9' },
+  linkButtonDisabled: { backgroundColor: colors.disabled },
   linkButtonText: { ...typography.bodyStrong, color: colors.onPrimary },
   linkHint: {
     ...typography.micro,
