@@ -13,6 +13,7 @@ import {
   ScrollView
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PDFService } from '../services/pdfService';
 import {
@@ -66,6 +67,9 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenProps) => {
+  // A transparent Modal covers the whole window, gesture bar included, so the
+  // sheet has to inset itself or its button ends up under the navigation bar.
+  const insets = useSafeAreaInsets();
   const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
@@ -425,15 +429,23 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const ServiceModal = () => (
+  const serviceModal = (
     <Modal
       animationType="slide"
       transparent={true}
+      statusBarTranslucent
       visible={modalVisible}
       onRequestClose={() => setModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
-        <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View
+          style={[
+            styles.modalContent,
+            // Clear the gesture bar, and never less than the normal padding.
+            { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xl },
+            { transform: [{ translateY: slideAnim }] },
+          ]}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
               {selectedService === 'reviewer' ? 'Reviewer Maker' :
@@ -446,7 +458,11 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
             </TouchableOpacity>
           </View>
           
-          <View style={styles.modalBody}>
+          <ScrollView
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalBodyContent}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.selectedFileInfo}>
               <Text style={styles.selectedFileLabel}>Selected File:</Text>
               <Text style={styles.selectedFileName}>{selectedFile?.name}</Text>
@@ -511,7 +527,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </ScrollView>
         </Animated.View>
       </View>
     </Modal>
@@ -699,7 +715,9 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
           <View style={styles.filesSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>📚 Your Documents</Text>
-              <Text style={styles.fileCount}>{uploadedFiles.length} files</Text>
+              <Text style={styles.fileCount}>
+                {uploadedFiles.length} {uploadedFiles.length === 1 ? 'file' : 'files'}
+              </Text>
             </View>
             
             {filteredFiles.length === 0 ? (
@@ -733,7 +751,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
         )}
       </ScrollView>
 
-      <ServiceModal />
+      {serviceModal}
       <LoadingOverlay
         visible={processing}
         title={loadingTitle}
@@ -942,8 +960,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-    minHeight: 280,
+    // Capped so a small screen scrolls the body instead of pushing the action
+    // button past the bottom edge.
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -956,7 +975,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: { ...typography.title, fontSize: 21, color: colors.textPrimary },
   closeButton: { fontSize: 20, color: colors.textMuted, fontWeight: '600', padding: spacing.xs },
-  modalBody: { flex: 1 },
+  modalBody: { flexGrow: 0 },
+  modalBodyContent: { paddingBottom: spacing.xs },
   selectedFileInfo: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,

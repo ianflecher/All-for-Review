@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography, shadow } from '../theme';
 
 /**
@@ -38,7 +39,12 @@ export const FormModal: React.FC<FormModalProps> = ({
   onSubmit,
   onClose,
   children,
-}) => (
+}) => {
+  // The modal window spans the whole screen, gesture bar included, so the
+  // action row has to inset itself or it sits underneath the navigation bar.
+  const insets = useSafeAreaInsets();
+
+  return (
   <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
     <KeyboardAvoidingView
       style={styles.flex}
@@ -62,7 +68,7 @@ export const FormModal: React.FC<FormModalProps> = ({
             {children}
           </ScrollView>
 
-          <View style={styles.actions}>
+          <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
             <TouchableOpacity style={[styles.button, styles.cancel]} onPress={onClose}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -78,7 +84,8 @@ export const FormModal: React.FC<FormModalProps> = ({
       </View>
     </KeyboardAvoidingView>
   </Modal>
-);
+  );
+};
 
 interface FieldProps {
   label: string;
@@ -156,7 +163,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
     maxHeight: '88%',
     ...shadow(3),
   },
