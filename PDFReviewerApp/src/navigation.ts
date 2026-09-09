@@ -55,10 +55,10 @@ export const TOOL_TILES: ToolTile[] = [
   },
   {
     key: 'map',
-    label: 'Learning Map',
-    icon: '🗺️',
+    label: 'Learning Path',
+    icon: '🧭',
     accent: colors.accentMap,
-    blurb: 'How ideas connect',
+    blurb: 'Easiest to hardest',
     screen: 'documents',
     needsDocument: true,
   },

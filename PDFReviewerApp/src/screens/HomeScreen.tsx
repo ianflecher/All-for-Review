@@ -28,7 +28,7 @@ import { DocumentAnalysis, FileItem, SourceKind } from '../types';
 import { ReviewerScreen } from './Reviewer';
 import { FlashcardScreen } from './FlashcardScreen';
 import { QuizScreen } from './QuizScreen';
-import { LearningMapScreen } from './LearningMapScreen';
+import { LearningPathScreen } from './LearningPathScreen';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { LoadingOverlay, LoadingStep } from '../components/LoadingOverlay';
@@ -412,7 +412,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
           style={styles.actionButton}
           onPress={() => handleServiceSelect('map', item)}
         >
-          <Text style={styles.actionButtonText}>Map</Text>
+          <Text style={styles.actionButtonText}>Path</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
@@ -451,7 +451,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
               {selectedService === 'reviewer' ? 'Reviewer Maker' :
                selectedService === 'flashcards' ? 'Flashcards' :
                selectedService === 'quiz' ? 'Quiz' :
-               selectedService === 'map' ? 'Learning Map' : 'Selected Service'}
+               selectedService === 'map' ? 'Learning Path' : 'Selected Service'}
             </Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
               <Text style={styles.closeButton}>✕</Text>
@@ -516,14 +516,14 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
             {selectedService === 'map' && (
               <View>
                 <Text style={styles.serviceDescription}>
-                  See how the main ideas in your material connect to each other, and spot
-                  the topics that stand alone and may need extra reading.
+                  Put the main ideas in order, starting with the groundwork this material
+                  introduces first and working up to what builds on it.
                 </Text>
                 <TouchableOpacity
                   style={styles.modalActionButton}
                   onPress={handleCreateMap}
                 >
-                  <Text style={styles.modalActionButtonText}>Build Learning Map →</Text>
+                  <Text style={styles.modalActionButtonText}>Build Learning Path →</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -568,7 +568,8 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
 
   if (view === 'map' && activeFile) {
     return (
-      <LearningMapScreen
+      <LearningPathScreen
+        fileId={activeFile.id}
         fileName={activeFile.name}
         text={activeText}
         onBack={() => setView('list')}

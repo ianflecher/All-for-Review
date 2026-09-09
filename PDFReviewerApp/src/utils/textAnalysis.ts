@@ -19,7 +19,46 @@ const STOPWORDS = new Set([
   'during', 'before', 'after', 'above', 'below', 'between', 'here', 'how', 'once',
   'off', 'should', 'could', 'may', 'might', 'must', 'shall', 'per', 'via', 'within',
   'without', 'upon', 'onto', 'thus', 'hence', 'etc', 'e.g', 'i.e', 'ing', 'page',
+  // Generic filler that scores well on frequency alone but names no idea, and
+  // would otherwise take a slot from a real topic.
+  'every', 'many', 'much', 'another', 'used', 'use', 'uses', 'using', 'make',
+  'makes', 'made', 'well', 'even', 'still', 'often', 'always', 'never', 'one',
+  'two', 'three', 'first', 'second', 'third', 'new', 'old', 'good', 'great',
+  'small', 'large', 'part', 'parts', 'kind', 'kinds', 'type', 'types', 'way',
+  'ways', 'thing', 'things', 'example', 'examples', 'called', 'known', 'important',
+  'different', 'various', 'like', 'get', 'gets', 'got', 'take', 'takes', 'give',
+  'gives', 'come', 'comes', 'know', 'need', 'needs', 'want', 'find', 'found',
+  'show', 'shows', 'shown', 'said', 'says', 'let', 'put', 'set', 'see', 'seen',
+  'keep', 'keeps', 'kept', 'help', 'helps', 'means', 'begin', 'begins', 'end',
+  'ends', 'goes', 'going', 'happen', 'happens', 'occur', 'occurs',
+  'inside', 'outside', 'around', 'across', 'along', 'among', 'toward', 'towards',
+  'behind', 'beyond', 'near', 'next', 'back', 'front', 'able', 'according',
 ]);
+
+/**
+ * Folds a plural into its singular when both forms appear, so "cell" and
+ * "cells" count as one idea instead of competing for two slots.
+ *
+ * Deliberately not a stemmer: a word is only touched when the other form is
+ * genuinely present in this document, which avoids mangling terms like "gas"
+ * or "process" that merely look like plurals.
+ */
+function mergePlurals(freq: Map<string, number>): Map<string, number> {
+  const merged = new Map(freq);
+
+  for (const word of [...merged.keys()]) {
+    if (!merged.has(word)) continue;
+    for (const suffix of ['s', 'es']) {
+      const plural = word + suffix;
+      const pluralCount = merged.get(plural);
+      if (pluralCount === undefined) continue;
+      merged.set(word, (merged.get(word) ?? 0) + pluralCount);
+      merged.delete(plural);
+    }
+  }
+
+  return merged;
+}
 
 function words(text: string): string[] {
   return text.toLowerCase().match(/[a-z0-9']+/g) || [];
@@ -106,7 +145,7 @@ function wordFrequencies(text: string): Map<string, number> {
 }
 
 export function extractKeywords(text: string, count = 15): string[] {
-  const freq = wordFrequencies(text);
+  const freq = mergePlurals(wordFrequencies(text));
   return [...freq.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, count)

@@ -4,7 +4,13 @@ A student app that runs entirely on the phone. Everything except fetching a
 web link works offline, with no account and no server.
 
 **From your documents** — a ranked summary, flashcards, a multiple-choice quiz
-and a concept map, generated from whatever you upload.
+and a step-by-step learning path, generated from whatever you upload.
+
+The learning path orders the document's main ideas foundations-first, using
+where each first appears, how often it recurs, whether the text defines it, how
+many earlier ideas it is explained with, and how specialised the term is. Every
+step shows the reasons for its placement, because this reflects the document's
+own build-up rather than any syllabus.
 
 **Accepts:** PDF, Word (`.docx`), PowerPoint (`.pptx`), text (`.txt`, `.md`,
 `.csv`), captions (`.srt`, `.vtt`) and web article links.
