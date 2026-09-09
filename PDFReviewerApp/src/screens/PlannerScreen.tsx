@@ -3,12 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Assignment } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { FormModal, Field, ChipRow } from '../components/FormModal';
+import { DateField } from '../components/DateField';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { loadJson, saveJson, STORAGE_KEYS } from '../utils/storage';
 import { ensureRemindersReady, refreshReminders } from '../services/reminders';
-import { addDays, daysUntil, formatDateLabel, isValidDate, todayISO } from '../utils/datetime';
+import { daysUntil, formatDateLabel, isValidDate, todayISO } from '../utils/datetime';
 
 interface PlannerScreenProps {
   onBack: () => void;
@@ -253,30 +254,7 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({ onBack }) => {
           placeholder="e.g. Chapter 4 problem set"
         />
         <ChipRow label="SUBJECT" options={subjectOptions} selected={subject} onSelect={setSubject} />
-        <Field
-          label="DUE DATE"
-          value={dueDate}
-          onChangeText={setDueDate}
-          placeholder="YYYY-MM-DD"
-          autoCapitalize="none"
-          error={dateError}
-        />
-        <View style={styles.quickRow}>
-          {[
-            { label: 'Today', value: todayISO() },
-            { label: 'Tomorrow', value: addDays(todayISO(), 1) },
-            { label: 'In 3 days', value: addDays(todayISO(), 3) },
-            { label: 'Next week', value: addDays(todayISO(), 7) },
-          ].map((quick) => (
-            <TouchableOpacity
-              key={quick.label}
-              style={styles.quickChip}
-              onPress={() => setDueDate(quick.value)}
-            >
-              <Text style={styles.quickChipText}>{quick.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <DateField label="DUE DATE" value={dueDate} onChange={setDueDate} />
         <Field
           label="NOTES (OPTIONAL)"
           value={notes}

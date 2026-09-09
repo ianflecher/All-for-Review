@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Transaction, TransactionKind } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { FormModal, Field, ChipRow } from '../components/FormModal';
+import { DateField } from '../components/DateField';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
@@ -301,14 +302,7 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
           error={amountError}
         />
         <ChipRow label="CATEGORY" options={categories} selected={category} onSelect={setCategory} />
-        <Field
-          label="DATE"
-          value={date}
-          onChangeText={setDate}
-          placeholder="YYYY-MM-DD"
-          autoCapitalize="none"
-          error={dateError}
-        />
+        <DateField label="DATE" value={date} onChange={setDate} />
         <Field
           label="NOTE (OPTIONAL)"
           value={note}

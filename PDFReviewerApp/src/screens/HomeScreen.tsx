@@ -32,7 +32,7 @@ import { LearningPathScreen } from './LearningPathScreen';
 import { persistPickedFile, deleteStoredFile } from '../services/fileStore';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
-import { removeJson } from '../utils/storage';
+import { removeJson, allKeys } from '../utils/storage';
 import { LoadingOverlay, LoadingStep } from '../components/LoadingOverlay';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
@@ -92,6 +92,9 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
   const [loadingTitle, setLoadingTitle] = useState('Processing');
   const [loadingDetail, setLoadingDetail] = useState<string | undefined>(undefined);
 
+  /** Documents whose text has already been extracted, so they open instantly. */
+  const [readyCount, setReadyCount] = useState(0);
+
   // "Add from web link" input
   const [linkUrl, setLinkUrl] = useState('');
   const [addingLink, setAddingLink] = useState(false);
@@ -140,11 +143,20 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
     ]).start();
   }, []);
 
+  // Counted from what is actually cached rather than assumed, so the number
+  // cannot claim a document is ready when its analysis was never stored.
+  const countReady = async (files: FileItem[]) => {
+    const keys = new Set(await allKeys());
+    setReadyCount(files.filter((file) => keys.has(`analysis_${file.id}`)).length);
+  };
+
   const loadSavedFiles = async () => {
     try {
       const saved = await AsyncStorage.getItem('uploadedFiles');
       if (saved) {
-        setUploadedFiles(JSON.parse(saved));
+        const parsed: FileItem[] = JSON.parse(saved);
+        setUploadedFiles(parsed);
+        countReady(parsed);
       }
     } catch (error) {
       console.error('Error loading files:', error);
@@ -434,6 +446,10 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
     );
   };
 
+  const subjectCount = new Set(
+    uploadedFiles.map((file) => file.subject).filter(Boolean)
+  ).size;
+
   const filteredFiles = uploadedFiles.filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -633,13 +649,15 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
               </View>
               <View style={styles.statDividerVertical} />
               <View style={styles.statBox}>
-                <Text style={styles.statBoxNumber}>100%</Text>
-                <Text style={styles.statBoxLabel}>Free</Text>
+                <Text style={styles.statBoxNumber}>{subjectCount}</Text>
+                <Text style={styles.statBoxLabel}>
+                  {subjectCount === 1 ? 'Subject' : 'Subjects'}
+                </Text>
               </View>
               <View style={styles.statDividerVertical} />
               <View style={styles.statBox}>
-                <Text style={styles.statBoxNumber}>4</Text>
-                <Text style={styles.statBoxLabel}>Services</Text>
+                <Text style={styles.statBoxNumber}>{readyCount}</Text>
+                <Text style={styles.statBoxLabel}>Ready</Text>
               </View>
             </View>
           </Animated.View>

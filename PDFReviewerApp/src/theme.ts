@@ -1,4 +1,4 @@
-import { Platform, ViewStyle } from 'react-native';
+import { Appearance, Platform, ViewStyle } from 'react-native';
 
 /**
  * Single source of truth for the app's visual language. Screens import from
@@ -6,7 +6,7 @@ import { Platform, ViewStyle } from 'react-native';
  * consistent and can be adjusted in one place.
  */
 
-export const colors = {
+const lightColors = {
   // Brand — a saturated blue, so the header blocks read as app chrome rather
   // than as a page banner.
   primary: '#2563eb',
@@ -59,6 +59,71 @@ export const colors = {
   /** Filled buttons that are currently unavailable. */
   disabled: '#b6c6e3',
 };
+
+/**
+ * Dark palette. Only the surfaces and text flip — the brand blue, the accents
+ * and the feedback colours stay recognisable, lifted slightly so they hold up
+ * against a dark ground.
+ */
+const darkColors: typeof lightColors = {
+  ...lightColors,
+
+  primary: '#3b82f6',
+  primaryDark: '#2563eb',
+  primaryDarker: '#1d4ed8',
+  primarySoft: 'rgba(59, 130, 246, 0.16)',
+  primarySoftBorder: 'rgba(59, 130, 246, 0.32)',
+
+  background: '#0f172a',
+  surface: '#1b2436',
+  surfaceAlt: '#161f30',
+
+  textPrimary: '#f1f5f9',
+  textSecondary: '#cbd5e1',
+  textMuted: '#8496ad',
+
+  border: '#2c3a51',
+
+  success: '#34d399',
+  successSoft: 'rgba(52, 211, 153, 0.15)',
+  danger: '#f87171',
+  dangerSoft: 'rgba(248, 113, 113, 0.15)',
+  warning: '#fbbf24',
+  warningSoft: 'rgba(251, 191, 36, 0.15)',
+
+  accentReviewer: '#60a5fa',
+  accentFlashcards: '#f472b6',
+  accentQuiz: '#34d399',
+  accentMap: '#fbbf24',
+  accentPlanner: '#a78bfa',
+  accentWallet: '#22d3ee',
+  accentSchedule: '#fb923c',
+  accentFiles: '#818cf8',
+
+  tile: '#0b1220',
+  tileOverlay: 'rgba(2, 6, 23, 0.6)',
+
+  tabActive: '#60a5fa',
+  tabInactive: '#7c8aa1',
+
+  disabled: '#3d4c66',
+};
+
+/**
+ * The palette is picked once, when the module first loads.
+ *
+ * Every screen builds its StyleSheet at module level, and StyleSheet.create
+ * freezes the values it is given — so a palette that changed at runtime would
+ * not reach any of them. Reading the system setting here instead means dark
+ * mode costs one lookup rather than rewriting nineteen stylesheets, at the
+ * price of needing the app reopened after the system theme is switched.
+ * Appearance returns null before the native module is ready, which falls back
+ * to light.
+ */
+export const isDarkMode = Appearance.getColorScheme() === 'dark';
+
+export const colors = isDarkMode ? darkColors : lightColors;
+
 
 export const spacing = {
   xs: 4,

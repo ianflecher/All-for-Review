@@ -55,6 +55,12 @@ const App = () => {
   // at startup rather than relying only on the planner having been opened.
   useEffect(() => {
     refreshReminders();
+
+    // Paint the window behind the app in the theme's own colour, so there is
+    // no white flash before the first frame on a dark device.
+    import('expo-system-ui')
+      .then((SystemUI) => SystemUI.setBackgroundColorAsync(colors.background))
+      .catch(() => undefined);
   }, []);
 
   /** Overdue plus due today — what actually needs attention now. */
