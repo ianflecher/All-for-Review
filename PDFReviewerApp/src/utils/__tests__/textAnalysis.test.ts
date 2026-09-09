@@ -1,4 +1,23 @@
-import { analyzeDocument, extractKeywords, extractTopics, splitIntoSentences } from '../textAnalysis';
+import {
+  analyzeDocument,
+  extractKeywords,
+  extractTopics,
+  generateFlashcards,
+  splitIntoSentences,
+} from '../textAnalysis';
+
+/** A Filipino module, the kind a student here is actually handed. */
+const TAGALOG = `Ang Sistemang Politikal ng Pilipinas
+
+Ang pamahalaan ng Pilipinas ay may tatlong sangay. Ang sangay na tagapagbatas ay
+gumagawa ng mga batas para sa bansa. Ang Kongreso ang sangay na tagapagbatas ng
+Pilipinas. Ang Senado at ang Kapulungan ng mga Kinatawan ay bahagi ng Kongreso.
+
+Ang sangay na tagapagpaganap ay nagpapatupad ng mga batas. Ang Pangulo ang puno
+ng sangay na tagapagpaganap.
+
+Ang sangay na panghukuman ay nagpapakahulugan ng mga batas. Ang Korte Suprema
+ang pinakamataas na hukuman sa Pilipinas.`;
 
 const LESSON = `Photosynthesis Overview
 
@@ -91,5 +110,68 @@ describe('analysing a document', () => {
   it('returns empty results for empty input instead of throwing', () => {
     const analysis = analyzeDocument('');
     expect(analysis).toMatchObject({ summary: [], flashcards: [], quiz: [], wordCount: 0 });
+  });
+});
+
+describe('Filipino material', () => {
+  it('does not rank function words as topics', () => {
+    const topics = extractTopics(TAGALOG, 8).map((topic) => topic.toLowerCase());
+    for (const functionWord of ['ang', 'mga', 'ang sangay', 'mga batas']) {
+      expect(topics).not.toContain(functionWord);
+    }
+  });
+
+  it('finds the real subject matter', () => {
+    const topics = extractTopics(TAGALOG, 8).map((topic) => topic.toLowerCase());
+    expect(topics).toEqual(
+      expect.arrayContaining(['sangay', 'kongreso', 'tagapagbatas', 'batas'])
+    );
+  });
+
+  it('asks about a Tagalog term in Tagalog', () => {
+    const cards = generateFlashcards(TAGALOG, 12);
+    const kongreso = cards.find((card) => card.question.includes('Kongreso'));
+
+    expect(kongreso?.question).toBe('Ano ang Kongreso?');
+    expect(kongreso?.answer).toContain('tagapagbatas');
+  });
+
+  it('drops a compound sentence rather than defining half of it', () => {
+    // "Ang Senado at ang Kapulungan ... ay bahagi ng Kongreso" defines neither
+    // on its own, and produced the card "Ano ang Senado at?".
+    const cards = generateFlashcards(TAGALOG, 12);
+    expect(cards.some((card) => /\bat\?/.test(card.question))).toBe(false);
+  });
+});
+
+describe('card quality', () => {
+  it('never blanks a word that is still visible elsewhere in the sentence', () => {
+    const text =
+      'The cell membrane controls what enters the cell. ' +
+      'A cell membrane is made of lipids. The membrane protects the cell inside.';
+
+    for (const card of generateFlashcards(text, 10)) {
+      if (!card.question.startsWith('Fill in the blank')) continue;
+      // The answer must not appear in its own question.
+      expect(card.question.toLowerCase()).not.toContain(card.answer.toLowerCase());
+    }
+  });
+
+  it('does not ask the same answer twice', () => {
+    const answers = analyzeDocument(LESSON).flashcards.map((card) => card.answer.toLowerCase());
+    expect(new Set(answers).size).toBe(answers.length);
+  });
+
+  it('skips sentences that open on a bare referent', () => {
+    // "It is produced in the _____" gives the reader nothing to reason from.
+    const cards = generateFlashcards(
+      'It is produced in the mitochondria of the cell. ' +
+        'They are found in the cytoplasm of the cell. ' +
+        'This is stored in the vacuole of the cell.',
+      5
+    );
+    for (const card of cards) {
+      expect(card.question).not.toMatch(/"(It|They|This)\b/);
+    }
   });
 });

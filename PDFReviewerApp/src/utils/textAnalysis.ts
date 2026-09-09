@@ -33,6 +33,21 @@ const STOPWORDS = new Set([
   'ends', 'goes', 'going', 'happen', 'happens', 'occur', 'occurs',
   'inside', 'outside', 'around', 'across', 'along', 'among', 'toward', 'towards',
   'behind', 'beyond', 'near', 'next', 'back', 'front', 'able', 'according',
+
+  // Filipino function words. Modules here are routinely Tagalog or Taglish,
+  // and without these "ang" and "mga" outrank every real topic on the page.
+  // Anything under three letters ("ng", "sa", "ay", "at") is already dropped
+  // by the length filter, so this covers what gets through.
+  'ang', 'mga', 'ito', 'iyon', 'iyan', 'nito', 'niyan', 'noon', 'dito', 'diyan',
+  'doon', 'ako', 'ikaw', 'siya', 'kami', 'kayo', 'sila', 'tayo', 'niya', 'nila',
+  'namin', 'natin', 'ninyo', 'akin', 'iyo', 'kanya', 'kanila', 'atin', 'amin',
+  'hindi', 'wala', 'walang', 'may', 'mayroon', 'meron', 'dahil', 'kaya', 'kung',
+  'upang', 'para', 'tungkol', 'isang', 'isa', 'bawat', 'lahat', 'ilan', 'iba',
+  'ibang', 'kapag', 'habang', 'subalit', 'ngunit', 'pero', 'kaysa', 'nang',
+  'din', 'rin', 'lang', 'lamang', 'naman', 'daw', 'raw', 'muna', 'ngayon',
+  'kapwa', 'tulad', 'katulad', 'halimbawa', 'ganito', 'ganoon', 'gayon',
+  'sapagkat', 'kasi', 'yung', 'ung', 'talaga', 'sobra', 'medyo', 'lalo',
+  'maging', 'naging', 'ginagawa', 'ginawa', 'nagiging', 'ayon', 'pati',
 ]);
 
 /**
@@ -289,19 +304,60 @@ export function generateSummary(text: string, maxSentences = 8): string[] {
   return top.sort((a, b) => a.idx - b.idx).map((t) => t.s.trim());
 }
 
+/**
+ * Picks the word to blank out of a sentence.
+ *
+ * Two rules decide whether a card is worth answering. The word has to appear
+ * exactly once in the sentence, or blanking one copy leaves the answer sitting
+ * in plain sight — "The _____ membrane controls what enters the cell". And it
+ * has to appear more than once in the document, or the card is testing a
+ * passing detail rather than anything the material is actually about.
+ */
 function findMostSignificantWord(sentence: string, freq: Map<string, number>): string | null {
-  const candidates = (sentence.match(/[A-Za-z][A-Za-z0-9'-]{3,}/g) || []).filter(
-    (w) => !STOPWORDS.has(w.toLowerCase())
-  );
+  const candidates = (sentence.match(/[A-Za-zÑñ][A-Za-zÑñ0-9'-]{3,}/g) || []).filter((word) => {
+    const lower = word.toLowerCase();
+    if (STOPWORDS.has(lower)) return false;
+    if ((freq.get(lower) ?? 0) < 2) return false;
+
+    const occurrences = sentence.match(new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi'));
+    return occurrences !== null && occurrences.length === 1;
+  });
+
   if (candidates.length === 0) return null;
-  candidates.sort((a, b) => (freq.get(b.toLowerCase()) || 0) - (freq.get(a.toLowerCase()) || 0));
+
+  candidates.sort((a, b) => (freq.get(b.toLowerCase()) ?? 0) - (freq.get(a.toLowerCase()) ?? 0));
   return candidates[0];
 }
+
+/**
+ * A sentence opening on a bare referent makes a useless card: "It is produced
+ * in the _____" gives the reader nothing to reason from, because whatever "it"
+ * was is in the sentence before.
+ */
+const VAGUE_OPENERS =
+  /^(it|this|these|those|they|he|she|there|such|ito|iyon|siya|sila|ang mga ito)\b/i;
 
 interface DefinitionPair {
   term: string;
   definition: string;
+  /** Drives the question wording, so a Tagalog term is not asked in English. */
+  tagalog: boolean;
 }
+
+/**
+ * A captured term ending in a conjunction means the sentence was a compound —
+ * "Ang Senado at ang Kapulungan ... ay bahagi ng Kongreso" defines neither
+ * half on its own, and the card it makes ("Ano ang Senado at?") is nonsense.
+ * These are dropped rather than trimmed, because trimming leaves a confident
+ * card carrying half a sentence's meaning.
+ */
+const TRAILING_CONNECTIVE = /\s+(at|o|ng|sa|and|or|of|the)$/i;
+
+/** "Ang X ay Y" and "Ang X ang Y" are how a Filipino module defines a term. */
+const TAGALOG_PATTERNS: RegExp[] = [
+  /^Ang\s+([A-Za-zÑñ0-9 '-]{2,40}?)\s+ay\s+(?:tinatawag na\s+)?(.{15,250})$/i,
+  /^Ang\s+([A-Za-zÑñ0-9 '-]{2,40}?)\s+ang\s+(.{15,250})$/i,
+];
 
 function extractDefinitions(sentences: string[]): DefinitionPair[] {
   const defs: DefinitionPair[] = [];
@@ -314,13 +370,45 @@ function extractDefinitions(sentences: string[]): DefinitionPair[] {
 
   for (const sentence of sentences) {
     const trimmed = sentence.trim().replace(/[.!?]+$/, '');
+
+    let tagalogHit = false;
+    for (const pattern of TAGALOG_PATTERNS) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+
+      const term = match[1].trim();
+      const definition = match[2].trim();
+      if (
+        term.split(' ').length <= 6 &&
+        definition.length > 10 &&
+        !TRAILING_CONNECTIVE.test(term)
+      ) {
+        defs.push({
+          term,
+          definition: definition.charAt(0).toUpperCase() + definition.slice(1),
+          tagalog: true,
+        });
+      }
+      tagalogHit = true;
+      break;
+    }
+    if (tagalogHit) continue;
+
     for (const pattern of patterns) {
       const match = trimmed.match(pattern);
       if (match) {
         const term = match[1].trim();
         const definition = match[2].trim();
-        if (term.split(' ').length <= 6 && definition.length > 10) {
-          defs.push({ term, definition: definition.charAt(0).toUpperCase() + definition.slice(1) });
+        if (
+          term.split(' ').length <= 6 &&
+          definition.length > 10 &&
+          !TRAILING_CONNECTIVE.test(term)
+        ) {
+          defs.push({
+            term,
+            definition: definition.charAt(0).toUpperCase() + definition.slice(1),
+            tagalog: false,
+          });
         }
         break;
       }
@@ -332,7 +420,8 @@ function extractDefinitions(sentences: string[]): DefinitionPair[] {
 export function generateFlashcards(text: string, count = 15): Flashcard[] {
   const sentences = splitIntoSentences(text).filter((s) => {
     const wc = words(s).length;
-    return wc >= 6 && s.length <= 300;
+    if (wc < 6 || s.length > 300) return false;
+    return !VAGUE_OPENERS.test(s.trim());
   });
   const freq = wordFrequencies(text);
   const flashcards: Flashcard[] = [];
@@ -343,7 +432,7 @@ export function generateFlashcards(text: string, count = 15): Flashcard[] {
     if (flashcards.length >= count) break;
     flashcards.push({
       id: `def-${flashcards.length}`,
-      question: `What is ${def.term}?`,
+      question: def.tagalog ? `Ano ang ${def.term}?` : `What is ${def.term}?`,
       answer: def.definition,
       createdAt: new Date(),
     });
@@ -357,18 +446,26 @@ export function generateFlashcards(text: string, count = 15): Flashcard[] {
       return scoreOf(b) - scoreOf(a);
     });
 
+  // One card per answer: several blanks resolving to the same word is the same
+  // question asked repeatedly, and it pads the deck without teaching anything.
+  const usedAnswers = new Set(flashcards.map((flashcard) => flashcard.answer.toLowerCase()));
+
   for (const sentence of remainingSentences) {
     if (flashcards.length >= count) break;
+
     const keyword = findMostSignificantWord(sentence, freq);
-    if (!keyword) continue;
+    if (!keyword || usedAnswers.has(keyword.toLowerCase())) continue;
+
     const blanked = sentence.replace(new RegExp(`\\b${escapeRegExp(keyword)}\\b`), '_____');
     if (blanked === sentence) continue;
+
     flashcards.push({
       id: `cloze-${flashcards.length}`,
       question: `Fill in the blank: "${blanked.trim()}"`,
       answer: keyword,
       createdAt: new Date(),
     });
+    usedAnswers.add(keyword.toLowerCase());
   }
 
   return flashcards;
