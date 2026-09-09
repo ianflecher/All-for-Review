@@ -42,6 +42,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Cheap and fast, and they run before the seven-minute Gradle step so a
+      # broken change fails in under a minute rather than at the end.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
       # Android decides what counts as an upgrade from versionCode alone. Left
       # at 1, every build looks like the same version and installing over an
       # existing copy can be refused, forcing an uninstall that wipes the

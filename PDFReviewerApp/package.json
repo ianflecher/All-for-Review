@@ -14,7 +14,9 @@
     "build:android": "eas build -p android --profile preview",
     "dist:win": "npm run build:web && electron-builder --win",
     "dist:mac": "npm run build:web && electron-builder --mac",
-    "dist:linux": "npm run build:web && electron-builder --linux"
+    "dist:linux": "npm run build:web && electron-builder --linux",
+    "test": "jest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -37,10 +39,13 @@
     "react-native-webview": "^13.16.1"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/pdfjs-dist": "^2.10.377",
     "@types/react": "~19.2.2",
     "electron": "^41.0.4",
     "electron-builder": "^26.8.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.12",
     "typescript": "~5.9.2"
   },
   "private": true,

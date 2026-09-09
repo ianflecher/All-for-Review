@@ -95,6 +95,12 @@ interface Stats {
   contexts: string[];
 }
 
+/**
+ * Below this, an ordering says nothing: one or two topics is a list, not a
+ * route, and the screen's empty state is more honest than a path of one step.
+ */
+const MIN_STEPS = 3;
+
 export function buildLearningPath(text: string, maxSteps = 12): PathStep[] {
   // Topics rather than bare words, so a step reads "Calvin cycle" instead of
   // splitting one idea across two steps.
@@ -200,6 +206,8 @@ export function buildLearningPath(text: string, maxSteps = 12): PathStep[] {
 
   const labels = new Map<string, string>();
   for (const item of scored) labels.set(item.entry.keyword, surfaceForm(text, item.entry.keyword));
+
+  if (scored.length < MIN_STEPS) return [];
 
   const third = Math.max(1, Math.ceil(scored.length / 3));
 
