@@ -152,6 +152,121 @@ export function extractKeywords(text: string, count = 15): string[] {
     .map(([w]) => w);
 }
 
+/**
+ * Pulls out multi-word topics as well as single ones.
+ *
+ * Counting single words alone splits "light-dependent reactions" into "light"
+ * and "reactions", which names two things the document never discusses
+ * separately. Runs of adjacent content words that recur are treated as one
+ * topic, and any single word already inside a chosen phrase is dropped so the
+ * list does not say both "genetic material" and "genetic".
+ *
+ * Phrases are read back from the source text rather than rebuilt from the
+ * lowercased tokens, so hyphens, capitals and acronyms survive intact.
+ */
+
+const MAX_PHRASE_WORDS = 3;
+const MIN_PHRASE_COUNT = 2;
+
+interface Candidate {
+  /** Lowercased, single-spaced, for counting. */
+  key: string;
+  /** As the document writes it, for display. */
+  display: string;
+  words: string[];
+  count: number;
+}
+
+function collectPhrases(text: string): Map<string, Candidate> {
+  const found = new Map<string, Candidate>();
+
+  for (const sentence of splitIntoSentences(text)) {
+    // Positions are kept so a phrase can be sliced back out with its original
+    // punctuation — "light-dependent", not "light dependent".
+    const tokens: { word: string; start: number; end: number }[] = [];
+    const pattern = /[A-Za-z][A-Za-z0-9'-]*/g;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(sentence)) !== null) {
+      tokens.push({ word: match[0], start: match.index, end: match.index + match[0].length });
+    }
+
+    for (let i = 0; i < tokens.length; i++) {
+      for (let size = 2; size <= MAX_PHRASE_WORDS && i + size <= tokens.length; size++) {
+        const run = tokens.slice(i, i + size);
+
+        // Every word must carry meaning: one stopword inside and the run is a
+        // fragment of a sentence rather than the name of an idea.
+        const usable = run.every(
+          (token) => token.word.length >= 3 && !STOPWORDS.has(token.word.toLowerCase())
+        );
+        if (!usable) break;
+
+        const key = run.map((token) => token.word.toLowerCase()).join(' ');
+        const display = sentence.slice(run[0].start, run[run.length - 1].end);
+
+        const existing = found.get(key);
+        if (existing) existing.count += 1;
+        else {
+          found.set(key, {
+            key,
+            display,
+            words: run.map((token) => token.word.toLowerCase()),
+            count: 1,
+          });
+        }
+      }
+    }
+  }
+
+  return found;
+}
+
+export function extractTopics(text: string, count = 12): string[] {
+  const singles = mergePlurals(wordFrequencies(text));
+  const phrases = [...collectPhrases(text).values()]
+    .filter((candidate) => candidate.count >= MIN_PHRASE_COUNT)
+    // A longer phrase that recurs as often as a shorter one is the better name
+    // for the idea, so length breaks the tie upwards.
+    .sort((a, b) => b.count * b.words.length - a.count * a.words.length);
+
+  const chosen: string[] = [];
+  const spent = new Set<string>();
+
+  /**
+   * Marks a phrase's words as claimed, including the pieces of a hyphenated
+   * one. The phrase tokenizer keeps "light-dependent" whole while the
+   * single-word counter splits it, so without this the list ends up showing
+   * "light-dependent reactions" and then "light" and "dependent" under it.
+   */
+  const claim = (word: string) => {
+    spent.add(word);
+    for (const piece of word.split(/[^a-z0-9']+/i)) {
+      if (piece.length > 0) spent.add(piece.toLowerCase());
+    }
+  };
+
+  for (const phrase of phrases) {
+    if (chosen.length >= count) break;
+    // Skip a phrase whose words are already claimed by a longer one taken above.
+    if (phrase.words.some((word) => spent.has(word))) continue;
+
+    chosen.push(phrase.display);
+    phrase.words.forEach(claim);
+  }
+
+  const remaining = [...singles.entries()]
+    .filter(([word]) => !spent.has(word))
+    .sort((a, b) => b[1] - a[1])
+    .map(([word]) => word);
+
+  for (const word of remaining) {
+    if (chosen.length >= count) break;
+    chosen.push(word);
+  }
+
+  return chosen;
+}
+
 export function generateSummary(text: string, maxSentences = 8): string[] {
   const sentences = splitIntoSentences(text).filter((s) => {
     const wc = words(s).length;
@@ -314,7 +429,7 @@ export function generateQuiz(text: string, flashcards: Flashcard[], count = 10):
 export function analyzeDocument(rawText: string): DocumentAnalysis {
   const text = cleanText(rawText);
   const summary = generateSummary(text, 8);
-  const keywords = extractKeywords(text, 15);
+  const keywords = extractTopics(text, 15);
   const flashcards = generateFlashcards(text, 15);
   const quiz = generateQuiz(text, flashcards, 10);
   const wordCount = words(text).length;

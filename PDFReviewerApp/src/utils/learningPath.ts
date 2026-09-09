@@ -1,4 +1,4 @@
-import { extractKeywords, splitIntoSentences } from './textAnalysis';
+import { extractTopics, splitIntoSentences } from './textAnalysis';
 
 /**
  * Turns a document into an ordered study path, foundations first.
@@ -96,7 +96,9 @@ interface Stats {
 }
 
 export function buildLearningPath(text: string, maxSteps = 12): PathStep[] {
-  const keywords = extractKeywords(text, maxSteps);
+  // Topics rather than bare words, so a step reads "Calvin cycle" instead of
+  // splitting one idea across two steps.
+  const keywords = extractTopics(text, maxSteps).map((topic) => topic.toLowerCase());
   if (keywords.length === 0) return [];
 
   const sentences = splitIntoSentences(text).filter((s) => s.trim().length > 0);
