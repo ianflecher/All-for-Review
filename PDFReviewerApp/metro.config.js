@@ -7,4 +7,10 @@ const config = getDefaultConfig(__dirname);
 // so they can be shipped inside the native app and used fully offline.
 config.resolver.assetExts.push('pdfjs');
 
+// The OCR engine ships as opaque assets under one extension. Metro would try
+// to bundle the .js parts as modules and would ignore the .wasm and .gz
+// entirely; ".ocrasset" keeps all five as files, copied out under their real
+// names on the device.
+config.resolver.assetExts.push('ocrasset');
+
 module.exports = config;

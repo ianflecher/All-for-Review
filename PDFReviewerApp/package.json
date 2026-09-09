@@ -16,7 +16,9 @@
     "dist:mac": "npm run build:web && electron-builder --mac",
     "dist:linux": "npm run build:web && electron-builder --linux",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare:ocr": "node scripts/prepare-ocr-assets.js",
+    "postinstall": "node scripts/prepare-ocr-assets.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -46,7 +48,11 @@
     "electron-builder": "^26.8.1",
     "jest": "^29.7.0",
     "ts-jest": "^29.4.12",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "tesseract.js": "^7.0.0",
+    "tesseract.js-core": "^6.1.2",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/fil": "^1.0.0"
   },
   "private": true,
   "build": {

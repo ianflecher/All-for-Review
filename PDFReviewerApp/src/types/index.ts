@@ -35,7 +35,7 @@ export interface PDFDocument {
   createdAt: Date;
 }
 
-export type SourceKind = 'pdf' | 'word' | 'slides' | 'text' | 'captions' | 'link';
+export type SourceKind = 'pdf' | 'word' | 'slides' | 'text' | 'captions' | 'link' | 'photo';
 
 export interface FileItem {
   id: string;

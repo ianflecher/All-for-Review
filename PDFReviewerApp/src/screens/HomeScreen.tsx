@@ -57,6 +57,7 @@ const SOURCE_ICONS: Record<SourceKind, string> = {
   text: '📃',
   captions: '🎬',
   link: '🔗',
+  photo: '📷',
 };
 
 const { width } = Dimensions.get('window');
@@ -198,7 +199,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
             'Unsupported file',
             ext === 'doc'
               ? 'Old .doc files are not supported. Please open it in Word and save it as .docx, then try again.'
-              : `"${ext}" files are not supported yet.\n\nSupported: PDF, Word (.docx), PowerPoint (.pptx), text (.txt, .md, .csv) and captions (.srt, .vtt).`
+              : `"${ext}" files are not supported yet.\n\nSupported: PDF, Word (.docx), PowerPoint (.pptx), text (.txt, .md, .csv), captions (.srt, .vtt) and photos (.jpg, .png).`
           );
           return;
         }
@@ -740,7 +741,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
               <>
                 <Text style={styles.uploadButtonText}>Upload a Document</Text>
                 <Text style={styles.uploadSubtext}>
-                  PDF • Word (.docx) • PowerPoint (.pptx) • .txt • .srt/.vtt captions
+                  PDF • Word • PowerPoint • text • captions • photos
                 </Text>
               </>
             )}

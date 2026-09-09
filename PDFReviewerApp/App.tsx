@@ -12,6 +12,7 @@ import { ScheduleScreen } from './src/screens/ScheduleScreen';
 import { FileOrganizerScreen } from './src/screens/FileOrganizerScreen';
 import { BottomTabBar, TabItem } from './src/components/BottomTabBar';
 import { PdfExtractorHost } from './src/services/nativePdfExtractor';
+import { OcrHost } from './src/services/ocrService';
 import { AppScreen } from './src/navigation';
 import { Assignment } from './src/types';
 import { loadJson, STORAGE_KEYS } from './src/utils/storage';
@@ -113,7 +114,11 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
+      {/* Both readers live where documents are opened. They are separate hosts
+          on purpose: the PDF one is the main path and should not be put at
+          risk by the OCR engine sharing its page. */}
       {needsPdfEngine && <PdfExtractorHost />}
+      {needsPdfEngine && <OcrHost />}
 
       {/* The blue headers run to the top of the screen, so only the bottom
           edge is inset — the header handles its own top padding. */}

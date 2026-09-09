@@ -6,7 +6,7 @@ import { htmlToArticleText, extractPageTitle } from '../utils/htmlToText';
 import { DocumentAnalysis } from '../types';
 import { PDFService } from './pdfService';
 
-export type SourceKind = 'pdf' | 'word' | 'slides' | 'text' | 'captions' | 'link';
+export type SourceKind = 'pdf' | 'word' | 'slides' | 'text' | 'captions' | 'link' | 'photo';
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -21,6 +21,12 @@ export const SUPPORTED_EXTENSIONS: Record<string, SourceKind> = {
   csv: 'text',
   srt: 'captions',
   vtt: 'captions',
+  // Photographed handouts and whiteboards, read with on-device OCR.
+  jpg: 'photo',
+  jpeg: 'photo',
+  png: 'photo',
+  webp: 'photo',
+  bmp: 'photo',
 };
 
 /**
@@ -45,6 +51,9 @@ export const PICKER_MIME_TYPES =
         'text/csv',
         'text/vtt',
         'application/x-subrip',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
         '.srt',
         '.vtt',
         '.md',
@@ -70,6 +79,8 @@ export function sourceKindLabel(kind: SourceKind): string {
       return 'Captions';
     case 'link':
       return 'Web page';
+    case 'photo':
+      return 'Photo';
   }
 }
 
@@ -204,12 +215,28 @@ export async function extractTextFromFile(uri: string, fileName: string): Promis
     }
     throw new Error(
       `"${ext}" files are not supported yet.\n\nSupported: PDF, Word (.docx), PowerPoint (.pptx), ` +
-        'text (.txt, .md, .csv) and captions (.srt, .vtt).'
+        'text (.txt, .md, .csv), captions (.srt, .vtt) and photos (.jpg, .png).'
     );
   }
 
   if (kind === 'pdf') {
     return PDFService.extractTextFromPDF(uri);
+  }
+
+  if (kind === 'photo') {
+    if (Platform.OS === 'web') {
+      throw new Error('Reading text from photos works in the phone app, not in the browser.');
+    }
+    const { recognizeImage } = await import('./ocrService');
+    const text = await recognizeImage(uri);
+
+    if (text.trim().length < 20) {
+      throw new Error(
+        'Not much text could be read from that photo.\n\nTry again with more light, the page ' +
+          'flat and filling the frame, and the camera held straight above it.'
+      );
+    }
+    return text;
   }
 
   const bytes = await readFileBytes(uri);

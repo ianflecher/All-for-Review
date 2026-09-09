@@ -24,6 +24,7 @@ const SOURCE_ICONS: Record<SourceKind, string> = {
   text: '📃',
   captions: '🎬',
   link: '🔗',
+  photo: '📷',
 };
 
 function formatSize(bytes?: number): string {
