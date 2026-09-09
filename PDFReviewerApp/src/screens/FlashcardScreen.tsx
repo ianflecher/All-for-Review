@@ -21,6 +21,10 @@ interface FlashcardScreenProps {
   /** Shown when no cards could be generated. */
   fallbackText?: string;
   onBack: () => void;
+  /** Hand the whole deck to a classmate. */
+  onShare?: () => void;
+  /** Write the deck out as a CSV Anki can import. */
+  onExportAnki?: () => void;
 }
 
 export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
@@ -29,6 +33,8 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
   flashcards,
   fallbackText,
   onBack,
+  onShare,
+  onExportAnki,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
@@ -132,6 +138,25 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
               </TouchableOpacity>
             </View>
 
+            {(onShare || onExportAnki) && (
+              <View style={styles.shareRow}>
+                {onShare && (
+                  <TouchableOpacity style={styles.shareButton} onPress={onShare} activeOpacity={0.8}>
+                    <Text style={styles.shareText}>Send deck</Text>
+                  </TouchableOpacity>
+                )}
+                {onExportAnki && (
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={onExportAnki}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.shareText}>Export for Anki</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             {showBack && (
               <View style={styles.knowRow}>
                 <TouchableOpacity
@@ -210,6 +235,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navButtonText: { ...typography.bodyStrong, color: colors.primary },
+
+  shareRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  shareButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  shareText: { ...typography.micro, color: colors.primary, fontWeight: '700' },
 
   knowRow: { flexDirection: 'row', gap: spacing.md },
   knowButton: {

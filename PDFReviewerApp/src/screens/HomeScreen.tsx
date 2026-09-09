@@ -30,6 +30,7 @@ import { FlashcardScreen } from './FlashcardScreen';
 import { QuizScreen } from './QuizScreen';
 import { LearningPathScreen } from './LearningPathScreen';
 import { persistPickedFile, deleteStoredFile } from '../services/fileStore';
+import { exportDeckForAnki, importDeck, readDeckFile, shareDeck } from '../services/deckShare';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { removeJson, allKeys } from '../utils/storage';
@@ -292,6 +293,47 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
       setAddingLink(false);
       setProcessing(false);
       setLoadingDetail(undefined);
+    }
+  };
+
+  const shareActiveDeck = async () => {
+    if (!activeFile || !activeAnalysis) return;
+    try {
+      await shareDeck(activeFile.name, activeText, activeAnalysis);
+    } catch (e) {
+      showAlert('Could not send', e instanceof Error ? e.message : 'Something went wrong.');
+    }
+  };
+
+  const exportActiveDeckToAnki = async () => {
+    if (!activeFile || !activeAnalysis) return;
+    try {
+      const cards = await exportDeckForAnki(activeFile.name, activeAnalysis.flashcards);
+      showAlert(
+        'Ready for Anki',
+        `${cards} card${cards === 1 ? '' : 's'} written as a CSV. In Anki, choose File then ` +
+          'Import and pick this file.'
+      );
+    } catch (e) {
+      showAlert('Could not export', e instanceof Error ? e.message : 'Something went wrong.');
+    }
+  };
+
+  const importSharedDeck = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        // Android tags .json inconsistently, so take anything and validate after.
+        type: PICKER_MIME_TYPES,
+        copyToCacheDirectory: true,
+      });
+      if (picked.canceled || !picked.assets?.[0]) return;
+
+      const raw = await readDeckFile(picked.assets[0].uri);
+      const { name, cards } = await importDeck(raw);
+      await loadSavedFiles();
+      showAlert('Deck added', `"${name}" is ready, with ${cards} card${cards === 1 ? '' : 's'}.`);
+    } catch (e) {
+      showAlert('Could not open that deck', e instanceof Error ? e.message : 'Something went wrong.');
     }
   };
 
@@ -577,6 +619,8 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
         flashcards={activeAnalysis.flashcards}
         fallbackText={activeText}
         onBack={() => setView('list')}
+        onShare={shareActiveDeck}
+        onExportAnki={exportActiveDeckToAnki}
       />
     );
   }
@@ -700,6 +744,14 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
                 </Text>
               </>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.importButton}
+            onPress={importSharedDeck}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.importButtonText}>📥 Open a deck a classmate sent</Text>
           </TouchableOpacity>
 
           <View style={styles.orRow}>
@@ -878,6 +930,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.md,
   },
+
+  importButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  importButtonText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
 
   orRow: {
     flexDirection: 'row',
