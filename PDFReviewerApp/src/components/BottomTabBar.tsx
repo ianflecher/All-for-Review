@@ -6,6 +6,8 @@ export interface TabItem {
   key: string;
   label: string;
   icon: string;
+  /** Count shown on the icon. Zero or undefined hides it. */
+  badge?: number;
 }
 
 interface BottomTabBarProps {
@@ -52,7 +54,14 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
       >
+        <View>
         <Text style={[styles.icon, active && styles.iconActive]}>{tab.icon}</Text>
+        {tab.badge ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{tab.badge > 9 ? '9+' : tab.badge}</Text>
+          </View>
+        ) : null}
+      </View>
         <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
           {tab.label}
         </Text>
@@ -107,6 +116,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   activeDotOn: { backgroundColor: colors.tabActive },
+
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: colors.onPrimary, fontSize: 9, fontWeight: '800', lineHeight: 12 },
 
   centerGap: { width: BUTTON_SIZE + 16 },
   centerButton: {

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +13,10 @@ import { FileOrganizerScreen } from './src/screens/FileOrganizerScreen';
 import { BottomTabBar, TabItem } from './src/components/BottomTabBar';
 import { PdfExtractorHost } from './src/services/nativePdfExtractor';
 import { AppScreen } from './src/navigation';
+import { Assignment } from './src/types';
+import { loadJson, STORAGE_KEYS } from './src/utils/storage';
+import { daysUntil } from './src/utils/datetime';
+import { refreshReminders } from './src/services/reminders';
 import { colors } from './src/theme';
 
 /** The four persistent destinations, two either side of the centre button. */
@@ -40,6 +44,34 @@ const App = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   // Incremented by the centre button to ask the study tab to open the picker.
   const [pickToken, setPickToken] = useState(0);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+
+  // Re-read on every tab change, so the badge reflects edits made elsewhere.
+  useEffect(() => {
+    loadJson<Assignment[]>(STORAGE_KEYS.assignments, []).then(setAssignments);
+  }, [tab, overlay, refreshKey]);
+
+  // Deadlines can pass while the app is closed, so rebuild the schedule once
+  // at startup rather than relying only on the planner having been opened.
+  useEffect(() => {
+    refreshReminders();
+  }, []);
+
+  /** Overdue plus due today — what actually needs attention now. */
+  const plannerBadge = useMemo(
+    () =>
+      assignments.filter((item) => {
+        if (item.done) return false;
+        const days = daysUntil(item.dueDate);
+        return days !== null && days <= 0;
+      }).length,
+    [assignments]
+  );
+
+  const tabs = useMemo(
+    () => TABS.map((tab) => (tab.key === 'planner' ? { ...tab, badge: plannerBadge } : tab)),
+    [plannerBadge]
+  );
 
   const goTab = useCallback((next: TabKey) => {
     setOverlay(null);
@@ -100,7 +132,7 @@ const App = () => {
             </View>
 
             <BottomTabBar
-              tabs={TABS}
+              tabs={tabs}
               activeKey={tab}
               onSelect={(key) => goTab(key as TabKey)}
               onCenterPress={startUpload}

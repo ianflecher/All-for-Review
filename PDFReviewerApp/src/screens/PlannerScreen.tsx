@@ -7,6 +7,7 @@ import { colors, radius, spacing, typography, card, shadow } from '../theme';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { loadJson, saveJson, STORAGE_KEYS } from '../utils/storage';
+import { ensureRemindersReady, refreshReminders } from '../services/reminders';
 import { addDays, daysUntil, formatDateLabel, isValidDate, todayISO } from '../utils/datetime';
 
 interface PlannerScreenProps {
@@ -34,7 +35,7 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({ onBack }) => {
 
   const persist = useCallback((next: Assignment[]) => {
     setAssignments(next);
-    saveJson(STORAGE_KEYS.assignments, next);
+    saveJson(STORAGE_KEYS.assignments, next).then(refreshReminders);
   }, []);
 
   const closeForm = useCallback(() => {
@@ -82,6 +83,10 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({ onBack }) => {
 
   const submit = () => {
     if (!canSave) return;
+
+    // Asked here rather than on first launch: the request makes sense right
+    // after someone sets a deadline they want to be reminded about.
+    ensureRemindersReady();
 
     if (editing) {
       persist(

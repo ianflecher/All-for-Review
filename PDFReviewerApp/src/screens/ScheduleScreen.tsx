@@ -7,6 +7,7 @@ import { colors, radius, spacing, typography, card, shadow } from '../theme';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { loadJson, saveJson, STORAGE_KEYS } from '../utils/storage';
+import { ensureRemindersReady, refreshReminders } from '../services/reminders';
 import {
   DAY_NAMES,
   DAY_SHORT,
@@ -40,7 +41,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ onBack }) => {
 
   const persist = useCallback((next: ClassSession[]) => {
     setSessions(next);
-    saveJson(STORAGE_KEYS.schedule, next);
+    saveJson(STORAGE_KEYS.schedule, next).then(refreshReminders);
   }, []);
 
   const closeForm = useCallback(() => {
@@ -114,6 +115,9 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ onBack }) => {
 
   const submit = () => {
     if (!canSave) return;
+
+    // A class reminder is the reason to allow notifications, so ask now.
+    ensureRemindersReady();
 
     const values = {
       subject: subject.trim(),
