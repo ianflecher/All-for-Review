@@ -61,3 +61,31 @@ export async function removeJson(key: string): Promise<void> {
     console.warn(`Could not remove "${key}" from storage:`, e);
   }
 }
+
+/** Every key this app owns, for the backup export. */
+export async function allKeys(): Promise<string[]> {
+  try {
+    if (onWeb()) return Object.keys(window.localStorage);
+    return [...(await (await nativeStore()).getAllKeys())];
+  } catch (e) {
+    console.warn('Could not list storage keys:', e);
+    return [];
+  }
+}
+
+export async function readRaw(key: string): Promise<string | null> {
+  try {
+    return onWeb() ? window.localStorage.getItem(key) : await (await nativeStore()).getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export async function writeRaw(key: string, value: string): Promise<void> {
+  try {
+    if (onWeb()) window.localStorage.setItem(key, value);
+    else await (await nativeStore()).setItem(key, value);
+  } catch (e) {
+    console.warn(`Could not write "${key}":`, e);
+  }
+}

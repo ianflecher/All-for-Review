@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,18 @@ import {
 import { QuizQuestion } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { LongText } from '../components/LongText';
+import { loadJson, saveJson } from '../utils/storage';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
+interface QuizAttempt {
+  date: string;
+  score: number;
+  total: number;
+}
+
 interface QuizScreenProps {
+  /** Score history is kept per document. */
+  fileId: string;
   fileName: string;
   questions: QuizQuestion[];
   /** Shown when no questions could be generated. */
@@ -23,6 +32,7 @@ interface QuizScreenProps {
 }
 
 export const QuizScreen: React.FC<QuizScreenProps> = ({
+  fileId,
   fileName,
   questions,
   fallbackText,
@@ -32,6 +42,13 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
   const [selected, setSelected] = useState<number | null>(null);
   const [answers, setAnswers] = useState<(number | null)[]>(() => questions.map(() => null));
   const [finished, setFinished] = useState(false);
+  const [history, setHistory] = useState<QuizAttempt[]>([]);
+
+  const storageKey = `quizHistory_${fileId}`;
+
+  useEffect(() => {
+    loadJson<QuizAttempt[]>(storageKey, []).then(setHistory);
+  }, [storageKey]);
 
   const hasQuestions = questions.length > 0;
   const question = hasQuestions ? questions[currentIndex] : null;
@@ -51,8 +68,21 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
     });
   };
 
+  const saveAttempt = (finalScore: number) => {
+    const attempt: QuizAttempt = {
+      date: new Date().toISOString(),
+      score: finalScore,
+      total: questions.length,
+    };
+    // Newest first, and capped so the record cannot grow without bound.
+    const next = [attempt, ...history].slice(0, 50);
+    setHistory(next);
+    saveJson(storageKey, next);
+  };
+
   const nextQuestion = () => {
     if (currentIndex + 1 >= questions.length) {
+      saveAttempt(score);
       setFinished(true);
       return;
     }
@@ -105,6 +135,12 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
               {score}/{questions.length}
             </Text>
             <Text style={styles.resultPct}>{pct}% correct</Text>
+            {history.length > 1 ? (
+              <Text style={styles.resultHistory}>
+                Best {Math.max(...history.map((a) => a.score))}/{questions.length} ·{' '}
+                {history.length} attempts
+              </Text>
+            ) : null}
           </View>
 
           {questions.map((q, idx) => {
@@ -249,6 +285,7 @@ const styles = StyleSheet.create({
   },
   resultScore: { fontSize: 40, fontWeight: '800', color: colors.primary },
   resultPct: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
+  resultHistory: { ...typography.micro, color: colors.textMuted, marginTop: spacing.sm, fontWeight: '500' },
 
   reviewCard: { ...card(1), padding: spacing.lg, marginBottom: spacing.md },
   reviewQuestion: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: 6 },

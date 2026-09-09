@@ -1,10 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+} from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { Assignment, ClassSession, FileItem, Transaction } from '../types';
 import { FormModal, Field } from '../components/FormModal';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { loadJson, saveJson, STORAGE_KEYS } from '../utils/storage';
+import { exportBackup, readBackupFile, restoreBackup } from '../services/backup';
+import { showAlert } from '../utils/alert';
 
 interface ProfileScreenProps {
   onBack: () => void;
@@ -38,6 +49,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [sessions, setSessions] = useState<ClassSession[]>([]);
 
+  const [busy, setBusy] = useState<'export' | 'restore' | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(DEFAULT_PROFILE.name);
   const [tagline, setTagline] = useState(DEFAULT_PROFILE.tagline);
@@ -125,6 +137,53 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
   );
 
   const earnedCount = badges.filter((badge) => badge.earned).length;
+
+  const runExport = async () => {
+    setBusy('export');
+    try {
+      const { entries } = await exportBackup();
+      showAlert(
+        'Backup saved',
+        `${entries} item${entries === 1 ? '' : 's'} written. Keep the file somewhere safe — ` +
+          'you can restore it on a new phone.'
+      );
+    } catch (e) {
+      showAlert('Could not export', e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runRestore = async () => {
+    const picked = await DocumentPicker.getDocumentAsync({
+      // Android tags .json inconsistently, so accept anything and validate after.
+      type: Platform.OS === 'android' ? ['*/*'] : ['application/json'],
+      copyToCacheDirectory: true,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+
+    setBusy('restore');
+    try {
+      const raw = await readBackupFile(picked.assets[0].uri);
+      const { restored, skipped } = await restoreBackup(raw);
+      showAlert(
+        'Restored',
+        `${restored} item${restored === 1 ? '' : 's'} put back` +
+          (skipped > 0 ? `, ${skipped} ignored` : '') +
+          '.\n\nReopen the app to see everything.'
+      );
+      // Reload what this screen shows without waiting for a restart.
+      loadJson<Profile>(STORAGE_KEYS.profile, DEFAULT_PROFILE).then(setProfile);
+      loadJson<FileItem[]>(STORAGE_KEYS.files, []).then(setFiles);
+      loadJson<Assignment[]>(STORAGE_KEYS.assignments, []).then(setAssignments);
+      loadJson<Transaction[]>(STORAGE_KEYS.transactions, []).then(setTransactions);
+      loadJson<ClassSession[]>(STORAGE_KEYS.schedule, []).then(setSessions);
+    } catch (e) {
+      showAlert('Could not restore', e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const openEdit = () => {
     setName(profile.name);
@@ -231,6 +290,38 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             {assignments.length === 1 ? '' : 's'} · {transactions.length} money entr
             {transactions.length === 1 ? 'y' : 'ies'} · {sessions.length} class
             {sessions.length === 1 ? '' : 'es'}
+          </Text>
+
+          <View style={styles.backupRow}>
+            <TouchableOpacity
+              style={[styles.backupButton, styles.backupPrimary]}
+              onPress={runExport}
+              disabled={busy !== null}
+              activeOpacity={0.85}
+            >
+              {busy === 'export' ? (
+                <ActivityIndicator color={colors.onPrimary} size="small" />
+              ) : (
+                <Text style={styles.backupPrimaryText}>Back up my data</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.backupButton, styles.backupSecondary]}
+              onPress={runRestore}
+              disabled={busy !== null}
+              activeOpacity={0.85}
+            >
+              {busy === 'restore' ? (
+                <ActivityIndicator color={colors.primary} size="small" />
+              ) : (
+                <Text style={styles.backupSecondaryText}>Restore</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.dataNote}>
+            The backup holds your summaries, cards, assignments, allowance and timetable. The
+            original PDFs and Word files stay on this phone — copy those over yourself.
           </Text>
         </View>
       </ScrollView>
@@ -367,4 +458,18 @@ const styles = StyleSheet.create({
   aboutText: { ...typography.caption, color: colors.textSecondary, lineHeight: 20 },
   aboutPlaceholder: { ...typography.caption, color: colors.textMuted, lineHeight: 20 },
   dataNote: { ...typography.micro, color: colors.textMuted, marginTop: spacing.md, fontWeight: '500' },
+
+  backupRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  backupButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  backupPrimary: { backgroundColor: colors.primary },
+  backupPrimaryText: { ...typography.caption, color: colors.onPrimary, fontWeight: '700' },
+  backupSecondary: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.primarySoftBorder },
+  backupSecondaryText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
 });

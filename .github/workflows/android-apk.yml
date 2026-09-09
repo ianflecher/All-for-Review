@@ -6,6 +6,7 @@ name: Build Android APK
 on:
   push:
     branches:
+      - main
       - claude/android-reviewer-fix-jf1sla
   workflow_dispatch:
 
@@ -40,6 +41,21 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Android decides what counts as an upgrade from versionCode alone. Left
+      # at 1, every build looks like the same version and installing over an
+      # existing copy can be refused, forcing an uninstall that wipes the
+      # user's data. The run number always increases, so updates install
+      # cleanly over the top.
+      - name: Stamp the build number
+        run: |
+          node -e "
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            config.expo.android.versionCode = ${{ github.run_number }};
+            fs.writeFileSync('app.json', JSON.stringify(config, null, 2) + '\n');
+            console.log('versionCode =', config.expo.android.versionCode);
+          "
 
       - name: Generate the native Android project
         run: npx expo prebuild -p android --no-install

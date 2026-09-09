@@ -7,6 +7,7 @@ import { colors, radius, spacing, typography, card } from '../theme';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
 import { loadJson, saveJson, removeJson, STORAGE_KEYS } from '../utils/storage';
+import { deleteStoredFile } from '../services/fileStore';
 import { detectSourceKind, sourceKindLabel } from '../services/sourceService';
 
 interface FileOrganizerScreenProps {
@@ -131,7 +132,9 @@ export const FileOrganizerScreen: React.FC<FileOrganizerScreenProps> = ({ onBack
         style: 'destructive',
         onPress: () => {
           persist(files.filter((f) => f.id !== file.id));
-          // Drop the cached summary too, so deleting really frees the space.
+          // Drop the stored copy and the cached summary, so deleting really
+          // frees the space rather than just hiding the row.
+          deleteStoredFile(file.uri);
           removeJson(`analysis_${file.id}`);
         },
       },

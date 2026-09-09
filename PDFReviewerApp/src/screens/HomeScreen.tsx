@@ -29,8 +29,10 @@ import { ReviewerScreen } from './Reviewer';
 import { FlashcardScreen } from './FlashcardScreen';
 import { QuizScreen } from './QuizScreen';
 import { LearningPathScreen } from './LearningPathScreen';
+import { persistPickedFile, deleteStoredFile } from '../services/fileStore';
 import { showAlert } from '../utils/alert';
 import { useAndroidBack } from '../utils/useAndroidBack';
+import { removeJson } from '../utils/storage';
 import { LoadingOverlay, LoadingStep } from '../components/LoadingOverlay';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
@@ -188,10 +190,14 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
           return;
         }
 
+        // The picker's copy lives in the cache, which Android may clear; keep
+        // our own copy so the document is still readable next month.
+        const storedUri = await persistPickedFile(file.uri, name);
+
         const newFile: FileItem = {
           id: Date.now().toString(),
           name,
-          uri: file.uri,
+          uri: storedUri,
           size: file.size,
           uploadedAt: new Date().toLocaleString(),
           type: kind,
@@ -287,9 +293,12 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const updatedFiles = uploadedFiles.filter(f => f.id !== fileId);
+            const target = uploadedFiles.find((f) => f.id === fileId);
+            const updatedFiles = uploadedFiles.filter((f) => f.id !== fileId);
             setUploadedFiles(updatedFiles);
             await saveFilesToStorage(updatedFiles);
+            if (target) await deleteStoredFile(target.uri);
+            await removeJson(`analysis_${fileId}`);
             showAlert('Deleted', 'File has been removed successfully.');
           },
         },
@@ -547,6 +556,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
   if (view === 'flashcards' && activeFile && activeAnalysis) {
     return (
       <FlashcardScreen
+        fileId={activeFile.id}
         fileName={activeFile.name}
         flashcards={activeAnalysis.flashcards}
         fallbackText={activeText}
@@ -558,6 +568,7 @@ export const HomeScreen = ({ onNavigateToLanding, pickToken = 0 }: HomeScreenPro
   if (view === 'quiz' && activeFile && activeAnalysis) {
     return (
       <QuizScreen
+        fileId={activeFile.id}
         fileName={activeFile.name}
         questions={activeAnalysis.quiz}
         fallbackText={activeText}

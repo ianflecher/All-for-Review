@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Flashcard } from '../types';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { LongText } from '../components/LongText';
+import { loadJson, saveJson } from '../utils/storage';
+import {
+  CardProgressMap,
+  dueCount,
+  masteredCount,
+  orderByDue,
+  recordAnswer,
+} from '../utils/spacedRepetition';
 import { colors, radius, spacing, typography, card, shadow } from '../theme';
 
 interface FlashcardScreenProps {
+  /** Progress is kept per document. */
+  fileId: string;
   fileName: string;
   flashcards: Flashcard[];
   /** Shown when no cards could be generated. */
@@ -14,6 +24,7 @@ interface FlashcardScreenProps {
 }
 
 export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
+  fileId,
   fileName,
   flashcards,
   fallbackText,
@@ -21,27 +32,43 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
-  const [known, setKnown] = useState<Set<number>>(new Set());
+  const [progressMap, setProgressMap] = useState<CardProgressMap>({});
+  const [deck, setDeck] = useState<Flashcard[]>(flashcards);
 
-  const hasCards = flashcards.length > 0;
-  const currentCard = hasCards ? flashcards[currentIndex] : null;
+  const storageKey = `flashcardProgress_${fileId}`;
+
+  useEffect(() => {
+    loadJson<CardProgressMap>(storageKey, {}).then((saved) => {
+      setProgressMap(saved);
+      // Ordered once, when the session starts. Re-sorting after every answer
+      // would move the deck under the user's thumb mid-review.
+      setDeck(orderByDue(flashcards, saved));
+      setCurrentIndex(0);
+    });
+  }, [storageKey, flashcards]);
+
+  const hasCards = deck.length > 0;
+  const currentCard = hasCards ? deck[currentIndex] : null;
+
+  const due = useMemo(() => dueCount(deck, progressMap), [deck, progressMap]);
+  const mastered = useMemo(() => masteredCount(deck, progressMap), [deck, progressMap]);
 
   const goTo = (index: number) => {
     setShowBack(false);
-    setCurrentIndex(((index % flashcards.length) + flashcards.length) % flashcards.length);
+    setCurrentIndex(((index % deck.length) + deck.length) % deck.length);
   };
 
   const markKnown = (isKnown: boolean) => {
-    setKnown((prev) => {
-      const next = new Set(prev);
-      if (isKnown) next.add(currentIndex);
-      else next.delete(currentIndex);
-      return next;
-    });
+    const card = deck[currentIndex];
+    if (card) {
+      const next = recordAnswer(progressMap, card.id, isKnown);
+      setProgressMap(next);
+      saveJson(storageKey, next);
+    }
     goTo(currentIndex + 1);
   };
 
-  const progress = hasCards ? (currentIndex + 1) / flashcards.length : 0;
+  const progress = hasCards ? (currentIndex + 1) / deck.length : 0;
 
   return (
     <View style={styles.container}>
@@ -72,9 +99,11 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
           <>
             <View style={styles.progressHeader}>
               <Text style={styles.progressLabel}>
-                Card {currentIndex + 1} of {flashcards.length}
+                Card {currentIndex + 1} of {deck.length}
               </Text>
-              <Text style={styles.knownLabel}>{known.size} known</Text>
+              <Text style={styles.knownLabel}>
+                {due} due · {mastered} learned
+              </Text>
             </View>
             <View style={styles.track}>
               <View style={[styles.fill, { width: `${progress * 100}%` }]} />
@@ -89,7 +118,9 @@ export const FlashcardScreen: React.FC<FlashcardScreenProps> = ({
               <Text style={styles.cardText}>
                 {showBack ? currentCard!.answer : currentCard!.question}
               </Text>
-              <Text style={styles.tapHint}>Tap to flip</Text>
+              <Text style={styles.tapHint}>
+                {showBack ? 'Tap to flip back' : 'Tap to flip'}
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.navRow}>
